@@ -1,0 +1,13 @@
+streamlit
+yfinance
+pandas
+numpy
+matplotlib
+seaborn
+plotly
+statsmodels
+scipy
+textblob
+scikit-learn
+gymnasium
+stable-baselines3
