@@ -9,5 +9,7 @@ statsmodels
 scipy
 textblob
 scikit-learn
-gymnasium
-stable-baselines3
+gymnasium[classic]
+stable-baselines3[extra]
+torch
+pyarrow

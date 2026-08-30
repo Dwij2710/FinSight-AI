@@ -62,6 +62,9 @@ class TemporalFusionModel:
         # Calculate Returns as additional input features
         for col in df.columns:
             df[f'{col}_Return'] = df[col].pct_change()
+        
+        # Replace inf/-inf (from zero-price division) with NaN before dropping
+        df = df.replace([np.inf, -np.inf], np.nan)
             
         # Target is tomorrow's price
         df['Target'] = df['Price'].shift(-1)

@@ -1,4 +1,6 @@
-
+import os
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
+import torch
 import streamlit as st
 
 # Page config MUST be the first Streamlit command

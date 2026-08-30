@@ -27,8 +27,9 @@ def add_technical_indicators(df):
     std20 = df['Close'].rolling(window=20).std()
     upper_band = sma20 + (std20 * 2)
     lower_band = sma20 - (std20 * 2)
-    df['BB_Position'] = (df['Close'] - lower_band) / (upper_band - lower_band)
-    df['BB_Position'] = df['BB_Position'].fillna(0.5)
+    band_width = (upper_band - lower_band).replace(0, np.nan)  # avoid div-by-zero → inf
+    df['BB_Position'] = (df['Close'] - lower_band) / band_width
+    df['BB_Position'] = df['BB_Position'].fillna(0.5).replace([np.inf, -np.inf], 0.5)
     
     return df
 
@@ -226,8 +227,17 @@ def evaluate_rl_agent(model, df, initial_balance=10000.0, risk_profile='Aggressi
         actions_taken.append(info['action_text'])
             
         done = terminated or truncated
-        
+    
+    # Prepend initial state so length matches the full DataFrame
     net_worths.insert(0, initial_balance)
     actions_taken.insert(0, 'Hold')
+    
+    # Ensure lists exactly match df length (pad or trim if needed)
+    target_len = len(df)
+    while len(net_worths) < target_len:
+        net_worths.append(net_worths[-1])
+        actions_taken.append('Hold')
+    net_worths = net_worths[:target_len]
+    actions_taken = actions_taken[:target_len]
         
     return net_worths, actions_taken

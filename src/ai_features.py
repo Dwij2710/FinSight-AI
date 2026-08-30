@@ -354,6 +354,8 @@ class LSTMForecaster:
         df['price_diff'] = df['price'].diff()
         df['price_diff2'] = df['price'].diff().diff()
         
+        # Replace inf/-inf with NaN, then drop all NaN rows
+        df = df.replace([np.inf, -np.inf], np.nan)
         df = df.dropna()
         return df
     
@@ -446,6 +448,11 @@ class LSTMForecaster:
         self.model_name = "Gradient Boosting (Sequential Features)"
         self.use_lstm = False
         X, y = self.prepare_data()
+        
+        # Sanitize: clip extreme values and remove any remaining non-finite rows
+        X = np.clip(X, -1e9, 1e9)
+        finite_mask = np.isfinite(X).all(axis=1) & np.isfinite(y)
+        X, y = X[finite_mask], y[finite_mask]
         
         split_idx = int(len(X) * 0.9)
         X_train, X_test = X[:split_idx], X[split_idx:]
