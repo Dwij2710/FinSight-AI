@@ -55,10 +55,10 @@
 | Module | Interface Preview |
 | :--- | :--- |
 | **Statistical Forecast (SARIMAX & Decompose)** | <img src="assets/forecast.png" alt="SARIMAX Forecast" width="520"/> |
-| **Portfolio Optimizer & Efficient Frontier** | <img src="assets/efficient_frontier.png" alt="Efficient Frontier" width="520"/> |
-| **Deep Learning & Model Benchmarks** | <img src="assets/model_comparison.png" alt="Model Comparison" width="520"/> |
+| **Portfolio Optimizer & Allocation** | <img src="assets/portfolio_optimization.png" alt="Portfolio Optimization" width="520"/> |
 | **Advanced AI Insights & FinBERT Sentiment** | <img src="assets/ai_insights.png" alt="AI Insights" width="520"/> |
-| **Asset Allocation & Tail Risk Analysis** | <img src="assets/portfolio_optimization.png" alt="Portfolio Allocation" width="520"/> |
+| **Reinforcement Learning Trading Agent** | <img src="assets/rl_trading.png" alt="RL Trading Agent" width="520"/> |
+| **Multi-Variate TFT & Macro Regime** | <img src="assets/macro_regime.png" alt="Multi-Variate Macro TFT" width="520"/> |
 
 </div>
 
