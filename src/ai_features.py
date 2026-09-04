@@ -7,7 +7,6 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.neural_network import MLPRegressor
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, mean_squared_error, mean_absolute_error, r2_score
-import streamlit as st
 import datetime
 import warnings
 warnings.filterwarnings('ignore')
@@ -114,7 +113,7 @@ class SentimentAnalyzer:
             
             return pd.DataFrame(data)
         except Exception as e:
-            st.error(f"Error fetching news: {e}")
+            print(f"Error fetching news: {e}")
             return pd.DataFrame()
 
 class NeuralNetForecaster:
@@ -645,7 +644,7 @@ class FinBERTAnalyzer:
             
             return pd.DataFrame(data), self._model_used()
         except Exception as e:
-            st.error(f"Error fetching news: {e}")
+            print(f"Error fetching news: {e}")
             return pd.DataFrame(), self._model_used()
     
     def _model_used(self):

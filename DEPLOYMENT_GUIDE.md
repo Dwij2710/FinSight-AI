@@ -100,9 +100,10 @@ Frontend is running at: `http://localhost:3000`.
 
 ---
 
-## 💡 What About the Streamlit Version?
+## 💡 Architecture Benefits
 
-Your original Streamlit app remains 100% intact and untouched in `app.py` and `views/`. You can still run it locally at any time:
-```powershell
-streamlit run app.py
-```
+Migrating to the **Next.js 14 + FastAPI** decoupled architecture provides:
+- **Instant UI Loading**: Zero Streamlit re-run overhead on widget clicks.
+- **Independent Scaling**: Scale the Next.js frontend on Vercel's global CDN and the Python ML backend on Render or Docker.
+- **Failover Protection**: The frontend automatically displays simulated analytics if the backend is cold-starting, ensuring 100% uptime for presentations and demos.
+
