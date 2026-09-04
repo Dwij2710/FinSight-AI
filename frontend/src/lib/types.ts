@@ -1,0 +1,195 @@
+// TypeScript Definitions for FinSight AI
+
+export interface ForecastPoint {
+  date: string;
+  actual?: number;
+  fitted?: number;
+}
+
+export interface PredictionPoint {
+  date: string;
+  predicted_mean: number;
+  lower_bound: number;
+  upper_bound: number;
+}
+
+export interface BacktestResult {
+  dates: string[];
+  actual: number[];
+  predicted: number[];
+  rmse: number;
+  mape: number;
+  accuracy: number;
+  error?: string;
+}
+
+export interface ForecastData {
+  ticker: string;
+  column: string;
+  metrics: {
+    rmse: number;
+    mape: number;
+    accuracy: number;
+  };
+  adf_test: {
+    test_statistic?: number;
+    p_value?: number;
+    is_stationary: boolean;
+    error?: string;
+  };
+  history: ForecastPoint[];
+  predictions: PredictionPoint[];
+  decomposition?: {
+    dates?: string[];
+    trend?: (number | null)[];
+    seasonal?: (number | null)[];
+    resid?: (number | null)[];
+    error?: string;
+  };
+  backtest?: BacktestResult | null;
+  summary?: string | null;
+}
+
+export interface PortfolioData {
+  valid_tickers: string[];
+  invalid_tickers: string[];
+  correlation_matrix: {
+    tickers: string[];
+    values: number[][];
+  };
+  max_sharpe: {
+    return: number;
+    volatility: number;
+    sharpe_ratio: number;
+    weights: Record<string, number>;
+  };
+  min_volatility: {
+    return: number;
+    volatility: number;
+    sharpe_ratio: number;
+    weights: Record<string, number>;
+  };
+  efficient_frontier: {
+    volatility: number[];
+    return: number[];
+  };
+  random_portfolios: {
+    volatility: number[];
+    return: number[];
+    sharpe: number[];
+  };
+  cumulative_growth: {
+    dates: string[];
+    series: Record<string, number[]>;
+  };
+  risk_metrics: {
+    beta: number;
+    max_drawdown_pct: number;
+    drawdown_history: { date: string; drawdown: number }[];
+  };
+  stress_tests: {
+    scenario: string;
+    market_drop_pct: number;
+    estimated_portfolio_impact_pct: number;
+  }[];
+}
+
+export interface NewsArticle {
+  Title: string;
+  Publisher: string;
+  Sentiment: 'Positive' | 'Negative' | 'Neutral';
+  'Sentiment Score': number;
+  Link: string;
+}
+
+export interface SentimentData {
+  ticker: string;
+  model_used: string;
+  overall_score: number;
+  overall_label: 'Positive' | 'Negative' | 'Neutral';
+  counts: {
+    Positive: number;
+    Neutral: number;
+    Negative: number;
+  };
+  articles: NewsArticle[];
+}
+
+export interface TradeSignalData {
+  ticker: string;
+  signal: string;
+  confidence_pct: number;
+  accuracy_pct: number;
+  is_strong: boolean;
+  feature_importance: { feature: string; importance: number }[];
+  technical_indicators: {
+    rsi: number | null;
+    sma_20: number | null;
+    sma_50: number | null;
+  };
+}
+
+export interface RlHistoryPoint {
+  date: string;
+  price: number;
+  agent_net_worth: number;
+  benchmark_net_worth: number;
+  action: string;
+}
+
+export interface RlSimulationData {
+  ticker: string;
+  algo_type: string;
+  action_type: string;
+  risk_profile: string;
+  engine: string;
+  initial_balance: number;
+  final_balance: number;
+  profit: number;
+  profit_pct: number;
+  benchmark_profit_pct: number;
+  max_drawdown_pct: number;
+  win_rate_pct: number;
+  total_trades: number;
+  history: RlHistoryPoint[];
+}
+
+export interface TftData {
+  ticker: string;
+  current_price: number;
+  sp500_price: number;
+  vix: number;
+  regime: string;
+  regime_desc: string;
+  attention_weights: { factor: string; weight_pct: number }[];
+  anomaly_analysis: {
+    is_anomaly: boolean;
+    risk_score: number;
+    message: string;
+  };
+  lookalike?: {
+    matched_date: string;
+    similarity: number;
+    future_return: number;
+  } | null;
+  probabilistic_forecast?: {
+    predicted: number;
+    lower: number;
+    upper: number;
+    confidence: number;
+  } | null;
+  scenarios: {
+    scenario: string;
+    projected_price: number;
+    impact_pct: number;
+  }[];
+  macro_correlations: {
+    indicator: string;
+    correlation: number;
+    latest_value: number;
+  }[];
+  macro_chart?: {
+    dates: string[];
+    series: Record<string, number[]>;
+  };
+}

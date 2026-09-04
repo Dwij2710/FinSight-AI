@@ -27,3 +27,11 @@ reports/
 
 # Logs
 *.log
+
+# Node & Next.js
+node_modules/
+.next/
+out/
+.env.local
+.env.*.local
+.vercel
