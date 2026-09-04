@@ -2,6 +2,7 @@
 Stock Portfolio Analysis Package
 """
 from .data_fetcher import DataFetcher
+from .polygon_client import PolygonClient
 from .returns_analysis import ReturnsAnalysis
 from .risk_metrics import RiskMetrics
 from .correlation_analysis import CorrelationAnalysis
@@ -11,6 +12,7 @@ from .ai_features import SentimentAnalyzer, NeuralNetForecaster, TrendClassifier
 
 __all__ = [
     'DataFetcher',
+    'PolygonClient',
     'ReturnsAnalysis', 
     'RiskMetrics',
     'CorrelationAnalysis',
@@ -22,3 +24,4 @@ __all__ = [
     'LSTMForecaster',
     'FinBERTAnalyzer'
 ]
+

@@ -10,6 +10,7 @@ if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
 from src import DataFetcher, ReturnsAnalysis, CorrelationAnalysis, PortfolioOptimizer
+from config.config import get_risk_free_rate, detect_benchmark_ticker
 from ..schemas import PortfolioRequest, ApiResponse
 from ..utils.serializer import sanitize_for_json
 
@@ -48,10 +49,16 @@ async def optimize_portfolio(req: PortfolioRequest):
         corr_analyzer = CorrelationAnalysis(daily_returns)
         correlation_matrix = corr_analyzer.calculate_correlation_matrix()
 
-        # 3. Portfolio Optimization
-        optimizer = PortfolioOptimizer(daily_returns)
+        # Dynamic benchmark & risk-free rate
+        benchmark_ticker = getattr(fetcher, 'benchmark_ticker', detect_benchmark_ticker(fetched_tickers))
+        risk_free_rate = get_risk_free_rate(benchmark_ticker)
+        benchmark_name = "NIFTY 50 (^NSEI)" if benchmark_ticker == "^NSEI" else "S&P 500 (^GSPC)"
+
+        # 3. Portfolio Optimization with Ledoit-Wolf shrinkage
+        optimizer = PortfolioOptimizer(daily_returns, risk_free_rate=risk_free_rate, use_shrinkage=True)
         max_sharpe = optimizer.optimize_sharpe_ratio()
         min_vol = optimizer.optimize_min_volatility()
+        risk_parity = optimizer.optimize_risk_parity()
 
         # Efficient frontier and random portfolios
         frontier = optimizer.generate_efficient_frontier(30)
@@ -136,6 +143,17 @@ async def optimize_portfolio(req: PortfolioRequest):
                 "volatility": round(float(min_vol['volatility'] * 100), 2),
                 "sharpe_ratio": round(float(min_vol['sharpe_ratio']), 4),
                 "weights": {k: round(float(v * 100), 2) for k, v in min_vol['weights'].items()}
+            },
+            "risk_parity": {
+                "return": round(float(risk_parity['return'] * 100), 2),
+                "volatility": round(float(risk_parity['volatility'] * 100), 2),
+                "sharpe_ratio": round(float(risk_parity['sharpe_ratio']), 4),
+                "weights": {k: round(float(v * 100), 2) for k, v in risk_parity['weights'].items()}
+            },
+            "benchmark_info": {
+                "ticker": benchmark_ticker,
+                "name": benchmark_name,
+                "risk_free_rate_pct": round(float(risk_free_rate * 100), 2)
             },
             "efficient_frontier": {
                 "volatility": [round(float(v * 100), 2) for v in frontier['Volatility']],

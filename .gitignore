@@ -32,6 +32,13 @@ reports/
 node_modules/
 .next/
 out/
+# Secrets & Environment Variables
+.env
 .env.local
 .env.*.local
 .vercel
+
+# Database
+*.db
+*.sqlite
+*.sqlite3

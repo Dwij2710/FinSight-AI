@@ -134,7 +134,7 @@ export function Header({
               ) : backendOnline ? (
                 `FastAPI Live (${latency || 45}ms)`
               ) : (
-                'Demo / Offline Mode'
+                'Backend Offline'
               )}
             </span>
             <RefreshCw size={12} className={checking ? 'spin' : ''} style={{ opacity: 0.7 }} />

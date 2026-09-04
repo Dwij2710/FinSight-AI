@@ -9,11 +9,11 @@ _PROJECT_ROOT = str(Path(__file__).resolve().parent.parent.parent.parent)
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-from src.tft_features import MultiVariateDataFetcher, TemporalFusionModel
+from src.tft_features import MultiVariateDataFetcher, MultiFactorRegimeModel
 from ..schemas import TftRequest, ApiResponse
 from ..utils.serializer import sanitize_for_json
 
-router = APIRouter(prefix="/api/tft", tags=["TFT Multi-Variate"])
+router = APIRouter(prefix="/api/tft", tags=["Multi-Factor Regime"])
 
 @router.post("/analyze", response_model=ApiResponse)
 async def analyze_tft(req: TftRequest):
@@ -32,7 +32,7 @@ async def analyze_tft(req: TftRequest):
         sp_val = float(data['S&P 500'].iloc[-1]) if 'S&P 500' in data.columns else 0.0
         vix_val = float(data['VIX'].iloc[-1]) if 'VIX' in data.columns else 0.0
 
-        model = TemporalFusionModel(data)
+        model = MultiFactorRegimeModel(data)
         attention_weights = model.train_and_extract_attention()
         anomaly_data = model.detect_macro_anomaly()
         lookalike_data = model.historical_lookalike(current_price)

@@ -46,15 +46,16 @@ class MultiVariateDataFetcher:
             return pd.DataFrame()
 
 
-class TemporalFusionModel:
+class MultiFactorRegimeModel:
     """
-    A lightweight simulate/proxy for Temporal Fusion Transformer.
-    Uses robust ML models to extract features, anomalies, and boundaries.
+    Multi-Factor Macro Regime Analysis using Random Forest Feature Attribution,
+    Isolation Forest Anomaly Detection, and Multivariate OLS Factor Regression.
     """
     def __init__(self, data):
         self.data = data
         self.model = RandomForestRegressor(n_estimators=100, random_state=42)
         self.scaler = MinMaxScaler()
+        self._factor_betas_cache = None
         
     def prepare_data(self):
         df = self.data.copy()
@@ -109,21 +110,31 @@ class TemporalFusionModel:
     def probabilistic_forecast(self, current_price):
         try:
             X, y, features = self.prepare_data()
+            X_scaled = self.scaler.fit_transform(X)
+            self.model.fit(X_scaled, y)
+
             latest_features = self.scaler.transform(X.iloc[[-1]])
+            base_pred = float(self.model.predict(latest_features)[0])
             
-            base_pred = self.model.predict(latest_features)[0]
+            # Compute empirical confidence interval from residual standard error
+            in_sample_preds = self.model.predict(X_scaled)
+            residuals = y.values - in_sample_preds
+            rse = float(np.std(residuals))
+            margin = 1.96 * max(rse, current_price * 0.01)
             
-            recent_volatility = self.data['Price'].pct_change().tail(20).std()
-            margin = current_price * recent_volatility * 1.96
-            
-            lower_bound = base_pred - margin
+            lower_bound = max(0.0, base_pred - margin)
             upper_bound = base_pred + margin
+
+            # Calculate statistical accuracy metric from MAPE
+            with np.errstate(divide='ignore', invalid='ignore'):
+                mape = float(np.nanmean(np.abs(residuals / y.values)) * 100)
+            confidence_score = max(50.0, min(99.0, 100.0 - mape))
             
             return {
                 'predicted': float(base_pred),
                 'lower': float(lower_bound),
                 'upper': float(upper_bound),
-                'confidence': 90 + np.random.randint(1, 8)
+                'confidence': round(confidence_score, 1)
             }
         except Exception as e:
             return None
@@ -201,12 +212,58 @@ class TemporalFusionModel:
             print("Lookalike error:", e)
             return None
 
+    def _compute_factor_betas(self):
+        """
+        Fits an asset-specific multivariate OLS regression against macro factor returns:
+        R_asset ~ beta_sp * R_sp + beta_vix * R_vix + beta_rate * R_rate + beta_oil * R_oil
+        """
+        if self._factor_betas_cache is not None:
+            return self._factor_betas_cache
+
+        from sklearn.linear_model import LinearRegression
+        default_betas = {'sp': 1.0, 'vix': -0.15, 'rate': -0.2, 'oil': -0.05}
+        try:
+            returns_df = self.data.pct_change().dropna()
+            if len(returns_df) < 20 or 'Price' not in returns_df.columns:
+                self._factor_betas_cache = default_betas
+                return self._factor_betas_cache
+            
+            y = returns_df['Price'].values
+            factor_mapping = {
+                'sp': 'S&P 500',
+                'vix': 'VIX',
+                'rate': 'Interest Rate (10Y)',
+                'oil': 'Crude Oil'
+            }
+            factors = []
+            keys = []
+            for k, col in factor_mapping.items():
+                if col in returns_df.columns:
+                    factors.append(returns_df[col].values)
+                    keys.append(k)
+
+            if not factors:
+                self._factor_betas_cache = default_betas
+                return self._factor_betas_cache
+
+            X = np.column_stack(factors)
+            lr = LinearRegression(fit_intercept=True).fit(X, y)
+            betas = dict(default_betas)
+            for k, coef in zip(keys, lr.coef_):
+                betas[k] = float(coef)
+            self._factor_betas_cache = betas
+            return betas
+        except Exception:
+            self._factor_betas_cache = default_betas
+            return self._factor_betas_cache
+
     def simulate_scenario_custom(self, current_price, sp500_pct, vix_pct, rate_pct, oil_pct):
+        betas = self._compute_factor_betas()
         impact = 0.0
-        impact += (sp500_pct / 100.0) * 1.1
-        impact -= (vix_pct / 100.0) * 0.15
-        impact -= (rate_pct / 100.0) * 0.3
-        impact -= (oil_pct / 100.0) * 0.1
+        impact += (sp500_pct / 100.0) * betas.get('sp', 1.0)
+        impact += (vix_pct / 100.0) * betas.get('vix', -0.15)
+        impact += (rate_pct / 100.0) * betas.get('rate', -0.2)
+        impact += (oil_pct / 100.0) * betas.get('oil', -0.05)
         new_price = current_price * (1 + impact)
         return new_price, (impact * 100.0)
         
@@ -223,3 +280,7 @@ class TemporalFusionModel:
                 return "Sideways Market ↔️", "Consolidating, uncertain direction."
         except:
             return "Unknown", "Insufficient data."
+
+# Backward compatibility alias
+TemporalFusionModel = MultiFactorRegimeModel
+

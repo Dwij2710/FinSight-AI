@@ -5,16 +5,25 @@ import { Globe, AlertTriangle, Layers, Compass, BarChart, History, CheckCircle }
 import { TftData } from '../lib/types';
 import { analyzeTft } from '../lib/api';
 import { RiskGauge, AllocationBars, MultiLineChart } from './Common/Charts';
+import { ErrorBanner } from './Common/ErrorBanner';
 
 export function TftView({ ticker }: { ticker: string }) {
   const [data, setData] = useState<TftData | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchTft = async () => {
     setLoading(true);
-    const res = await analyzeTft(ticker);
-    setData(res.data);
-    setLoading(false);
+    setError(null);
+    try {
+      const res = await analyzeTft(ticker);
+      setData(res.data);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to compute multivariate factor regime model.');
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -37,6 +46,16 @@ export function TftView({ ticker }: { ticker: string }) {
           Correlates multiple macroeconomic factors simultaneously: S&P 500, VIX, 10Y Yields, Crude Oil, and Gold.
         </p>
       </div>
+
+      {error && (
+        <ErrorBanner
+          title="Macro Multi-Factor Pipeline Notice"
+          error={error}
+          onRetry={fetchTft}
+          onDismiss={() => setError(null)}
+          suggestedAction="Ensure the backend service has network connectivity to download macro factor series."
+        />
+      )}
 
       {/* Top Regime & Macro State Bar */}
       {data && (

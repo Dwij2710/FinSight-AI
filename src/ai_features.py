@@ -524,10 +524,13 @@ class LSTMForecaster:
         return self.scaler.inverse_transform(future_predictions)
 
 
+_GLOBAL_FINBERT_PIPELINE = None
+_FINBERT_TRIED = False
+
 class FinBERTAnalyzer:
     """
     Advanced financial sentiment analysis using FinBERT (Transformer model).
-    Falls back to TextBlob + Financial Lexicon if transformers is not installed.
+    Falls back to TextBlob + Financial Lexicon if transformers or model is not cached.
     """
     def __init__(self, ticker):
         self.ticker = ticker
@@ -537,16 +540,34 @@ class FinBERTAnalyzer:
         self._init_model()
     
     def _init_model(self):
-        """Try to load FinBERT, fallback to TextBlob."""
+        """Load FinBERT via singleton or fallback to financial lexicon."""
+        global _GLOBAL_FINBERT_PIPELINE, _FINBERT_TRIED
+        if _GLOBAL_FINBERT_PIPELINE is not None:
+            self.pipeline = _GLOBAL_FINBERT_PIPELINE
+            self.use_finbert = True
+            return
+
+        if _FINBERT_TRIED:
+            self.use_finbert = False
+            return
+
+        _FINBERT_TRIED = True
         try:
             from transformers import pipeline
-            self.pipeline = pipeline(
-                "sentiment-analysis", 
-                model=self.model_name,
-                tokenizer=self.model_name,
-                top_k=None
-            )
-            self.use_finbert = True
+            # Check if local model weights are present without blocking network download
+            try:
+                self.pipeline = pipeline(
+                    "sentiment-analysis", 
+                    model=self.model_name,
+                    tokenizer=self.model_name,
+                    model_kwargs={"local_files_only": True},
+                    top_k=None
+                )
+                _GLOBAL_FINBERT_PIPELINE = self.pipeline
+                self.use_finbert = True
+            except Exception:
+                # Local weights not present; use domain lexicon hybrid fallback for speed
+                self.use_finbert = False
         except Exception:
             self.use_finbert = False
     

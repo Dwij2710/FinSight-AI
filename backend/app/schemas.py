@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
+from datetime import datetime
 
 # ==================== FORECAST SCHEMAS ====================
 class ForecastRequest(BaseModel):
@@ -41,10 +42,68 @@ class RlSimulateRequest(BaseModel):
     risk_profile: Optional[str] = Field("Aggressive", description="Aggressive or Conservative")
     timesteps: Optional[int] = Field(10000, ge=1000, le=50000)
 
-# ==================== TFT SCHEMAS ====================
+# ==================== TFT / MULTI-FACTOR REGIME SCHEMAS ====================
 class TftRequest(BaseModel):
     ticker: str = Field("AAPL")
     stress_scenarios: Optional[Dict[str, float]] = Field(default=None)
+
+# ==================== PERSISTENCE SCHEMAS ====================
+class PortfolioItemCreate(BaseModel):
+    ticker: str
+    target_weight: float
+    asset_class: Optional[str] = "Equity"
+
+class PortfolioItemResponse(BaseModel):
+    id: int
+    portfolio_id: int
+    ticker: str
+    target_weight: float
+    asset_class: Optional[str] = "Equity"
+
+    class Config:
+        from_attributes = True
+
+class PortfolioCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    description: Optional[str] = None
+    items: List[PortfolioItemCreate] = Field(default_factory=list)
+
+class PortfolioResponse(BaseModel):
+    id: int
+    name: str
+    description: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    items: List[PortfolioItemResponse] = Field(default_factory=list)
+
+    class Config:
+        from_attributes = True
+
+class WatchlistItemCreate(BaseModel):
+    ticker: str
+    notes: Optional[str] = None
+
+class WatchlistItemResponse(BaseModel):
+    id: int
+    watchlist_id: int
+    ticker: str
+    notes: Optional[str] = None
+    added_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class WatchlistCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+
+class WatchlistResponse(BaseModel):
+    id: int
+    name: str
+    created_at: datetime
+    items: List[WatchlistItemResponse] = Field(default_factory=list)
+
+    class Config:
+        from_attributes = True
 
 # ==================== GENERIC RESPONSE SCHEMA ====================
 class ApiResponse(BaseModel):

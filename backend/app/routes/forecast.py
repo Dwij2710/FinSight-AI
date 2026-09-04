@@ -4,7 +4,14 @@ import pandas as pd
 import numpy as np
 import datetime
 from datetime import date, timedelta
+import sys
+from pathlib import Path
 
+_PROJECT_ROOT = str(Path(__file__).resolve().parent.parent.parent.parent)
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
+
+from src.data_fetcher import DataFetcher
 from ..schemas import ForecastRequest, ApiResponse
 from ..utils.serializer import sanitize_for_json
 
@@ -20,17 +27,19 @@ async def generate_forecast(req: ForecastRequest):
         start_date = req.start_date or "2023-01-01"
         end_date = req.end_date or date.today().strftime("%Y-%m-%d")
 
-        # 1. Download stock data
-        data = yf.download(ticker, start=start_date, end=end_date, progress=False)
+        # 1. Download stock data via institutional DataFetcher (Polygon + YF fallback + caching)
+        fetcher = DataFetcher()
+        data = fetcher.fetch_single_ticker(ticker, start_date=start_date, end_date=end_date)
         if data.empty:
             raise HTTPException(status_code=404, detail=f"No data found for ticker '{ticker}'.")
 
-        if isinstance(data.columns, pd.MultiIndex):
-            data.columns = [' '.join(col).strip() for col in data.columns.values]
-
         if 'Date' not in data.columns:
-            data.insert(0, "Date", data.index)
-        data.reset_index(drop=True, inplace=True)
+            data = data.reset_index()
+            if 'Date' not in data.columns and 'index' in data.columns:
+                data.rename(columns={'index': 'Date'}, inplace=True)
+            elif 'Date' not in data.columns:
+                data.insert(0, "Date", data.index)
+
 
         col = req.column
         if col not in data.columns:
@@ -88,7 +97,7 @@ async def generate_forecast(req: ForecastRequest):
             from sklearn.metrics import mean_squared_error
 
             order = (req.p, req.d, req.q)
-            seasonal_order = (req.sp, req.sd, req.sq, req.seasonal_period)
+            seasonal_order = (req.sp, req.sd, req.sq, req.seasonal_period) if (req.seasonal_period and req.seasonal_period > 0) else (0, 0, 0, 0)
             model = sm.tsa.statespace.SARIMAX(
                 series,
                 order=order,
@@ -96,15 +105,15 @@ async def generate_forecast(req: ForecastRequest):
                 enforce_stationarity=False,
                 enforce_invertibility=False
             )
-            fitted_model = model.fit(disp=False)
+            fitted_model = model.fit(disp=False, maxiter=200)
 
             pred_res = fitted_model.get_prediction(start=len(series), end=len(series) + forecast_steps - 1)
             pred_mean = pred_res.predicted_mean
             conf_int = pred_res.conf_int()
 
             for i, (f_date, val) in enumerate(zip(future_dates, pred_mean)):
-                lower = float(conf_int.iloc[i, 0]) if not conf_int.empty else float(val * 0.96)
-                upper = float(conf_int.iloc[i, 1]) if not conf_int.empty else float(val * 1.04)
+                lower = float(conf_int.iloc[i, 0]) if not conf_int.empty else float(val * 0.95)
+                upper = float(conf_int.iloc[i, 1]) if not conf_int.empty else float(val * 1.05)
                 predictions_list.append({
                     "date": f_date.strftime('%Y-%m-%d'),
                     "predicted_mean": round(float(val), 2),
@@ -119,19 +128,49 @@ async def generate_forecast(req: ForecastRequest):
                 mape = float(np.nanmean(mape_vals) * 100)
             accuracy = max(0.0, min(100.0, 100.0 - mape))
 
-        except Exception:
-            # Robust fallback statistical autoregression if DLL paging fails on host
-            last_val = float(series.iloc[-1])
-            std_val = float(series.pct_change().std()) * last_val
-            for i, f_date in enumerate(future_dates):
-                val = last_val * (1 + (i + 1) * 0.001)
-                predictions_list.append({
-                    "date": f_date.strftime('%Y-%m-%d'),
-                    "predicted_mean": round(val, 2),
-                    "lower_bound": round(val - std_val * np.sqrt(i + 1), 2),
-                    "upper_bound": round(val + std_val * np.sqrt(i + 1), 2)
-                })
-            fitted_vals = series.rolling(3, min_periods=1).mean()
+        except HTTPException:
+            raise
+        except Exception as err:
+            raise HTTPException(
+                status_code=422,
+                detail=f"SARIMAX optimization did not converge with order ({req.p},{req.d},{req.q}) and seasonal ({req.sp},{req.sd},{req.sq},{req.seasonal_period}): {str(err)}. Please adjust differencing (d=1) or seasonal period."
+            )
+
+        # 5. Out-of-sample holdout backtest (if requested and sufficient data)
+        backtest_data = None
+        if req.run_backtest and len(series) >= 40:
+            holdout_len = min(30, len(series) // 4)
+            train_series = series.iloc[:-holdout_len]
+            test_series = series.iloc[-holdout_len:]
+            test_dates = [d.strftime('%Y-%m-%d') if hasattr(d, 'strftime') else str(d) for d in data_subset['Date'].iloc[-holdout_len:]]
+
+            try:
+                bt_model = sm.tsa.statespace.SARIMAX(
+                    train_series,
+                    order=order,
+                    seasonal_order=seasonal_order,
+                    enforce_stationarity=False,
+                    enforce_invertibility=False
+                )
+                bt_fitted = bt_model.fit(disp=False, maxiter=200)
+                bt_preds = bt_fitted.get_prediction(start=len(train_series), end=len(train_series) + holdout_len - 1).predicted_mean
+                
+                bt_rmse = float(np.sqrt(mean_squared_error(test_series, bt_preds)))
+                with np.errstate(divide='ignore', invalid='ignore'):
+                    bt_mape_vals = np.abs((test_series - bt_preds) / test_series)
+                    bt_mape = float(np.nanmean(bt_mape_vals) * 100)
+                bt_acc = max(0.0, min(100.0, 100.0 - bt_mape))
+
+                backtest_data = {
+                    "dates": test_dates,
+                    "actual": [round(float(v), 2) for v in test_series],
+                    "predicted": [round(float(v), 2) for v in bt_preds],
+                    "rmse": round(bt_rmse, 2),
+                    "mape": round(bt_mape, 2),
+                    "accuracy": round(bt_acc, 2)
+                }
+            except Exception as e:
+                backtest_data = {"error": f"Backtest fitting failed: {str(e)}"}
 
         # Format history data
         history_points = []
@@ -155,7 +194,8 @@ async def generate_forecast(req: ForecastRequest):
                 "adf_test": adf_result,
                 "history": history_points,
                 "predictions": predictions_list,
-                "decomposition": decomp_data
+                "decomposition": decomp_data,
+                "backtest": backtest_data
             })
         )
 
@@ -163,4 +203,5 @@ async def generate_forecast(req: ForecastRequest):
         raise
     except Exception as e:
         import traceback
-        return ApiResponse(success=False, message=f"Forecast error: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Forecast error: {str(e)}")
+

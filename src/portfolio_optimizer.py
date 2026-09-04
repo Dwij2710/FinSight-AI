@@ -19,16 +19,18 @@ class PortfolioOptimizer:
     Class to perform portfolio optimization using Modern Portfolio Theory
     """
     
-    def __init__(self, returns_data, risk_free_rate=None):
+    def __init__(self, returns_data, risk_free_rate=None, use_shrinkage=True):
         """
         Initialize with returns data
         
         Args:
             returns_data: DataFrame with daily returns
             risk_free_rate: Annual risk-free rate
+            use_shrinkage: Whether to use Ledoit-Wolf covariance shrinkage
         """
         self.returns = returns_data
-        self.risk_free_rate = risk_free_rate or RISK_FREE_RATE
+        self.risk_free_rate = risk_free_rate if risk_free_rate is not None else RISK_FREE_RATE
+        self.use_shrinkage = use_shrinkage
         self.n_assets = len(returns_data.columns)
         self.assets = returns_data.columns.tolist()
         
@@ -47,11 +49,22 @@ class PortfolioOptimizer:
     
     def _calculate_covariance(self):
         """
-        Calculate annualized covariance matrix
+        Calculate annualized covariance matrix using Ledoit-Wolf shrinkage
+        when possible for numerical stability, falling back to sample covariance.
         
         Returns:
             Covariance matrix
         """
+        if self.use_shrinkage and len(self.returns) > self.n_assets:
+            try:
+                from sklearn.covariance import LedoitWolf
+                lw = LedoitWolf()
+                clean_returns = self.returns.dropna()
+                lw.fit(clean_returns.values)
+                shrunk_cov = lw.covariance_ * TRADING_DAYS
+                return pd.DataFrame(shrunk_cov, index=self.returns.columns, columns=self.returns.columns)
+            except Exception:
+                pass
         return self.returns.cov() * TRADING_DAYS
     
     def _portfolio_return(self, weights):
@@ -167,6 +180,54 @@ class PortfolioOptimizer:
             'return': optimal_return,
             'volatility': optimal_volatility,
             'sharpe_ratio': (optimal_return - self.risk_free_rate) / optimal_volatility
+        }
+    
+    def optimize_risk_parity(self):
+        """
+        Find the Equal Risk Contribution (Risk Parity) portfolio.
+        Every asset contributes an equal share of overall portfolio volatility.
+        
+        Returns:
+            Dict with optimal weights, return, volatility, and Sharpe ratio
+        """
+        init_weights = np.array([1/self.n_assets] * self.n_assets)
+        cov = self.cov_matrix.values if hasattr(self.cov_matrix, 'values') else np.array(self.cov_matrix)
+
+        def risk_budget_objective(weights):
+            w = np.array(weights)
+            port_vol = np.sqrt(np.dot(w.T, np.dot(cov, w)))
+            if port_vol <= 1e-8:
+                return 0.0
+            # Marginal risk contribution
+            mrc = np.dot(cov, w) / port_vol
+            # Total risk contribution
+            rc = w * mrc
+            target_rc = port_vol / self.n_assets
+            return np.sum(np.square(rc - target_rc))
+
+        constraints = [{'type': 'eq', 'fun': lambda w: np.sum(w) - 1.0}]
+        bounds = tuple((1e-4, 1.0) for _ in range(self.n_assets))
+
+        result = minimize(
+            risk_budget_objective,
+            init_weights,
+            method='SLSQP',
+            bounds=bounds,
+            constraints=constraints,
+            options={'ftol': 1e-9, 'maxiter': 500}
+        )
+
+        optimal_weights = result.x if result.success else init_weights
+        optimal_weights = optimal_weights / np.sum(optimal_weights)
+        optimal_return = self._portfolio_return(optimal_weights)
+        optimal_volatility = self._portfolio_volatility(optimal_weights)
+        optimal_sharpe = (optimal_return - self.risk_free_rate) / optimal_volatility
+
+        return {
+            'weights': dict(zip(self.assets, optimal_weights)),
+            'return': optimal_return,
+            'volatility': optimal_volatility,
+            'sharpe_ratio': optimal_sharpe
         }
     
     def optimize_target_return(self, target_return):
@@ -303,6 +364,7 @@ class PortfolioOptimizer:
         """
         max_sharpe = self.optimize_sharpe_ratio()
         min_vol = self.optimize_min_volatility()
+        risk_parity = self.optimize_risk_parity()
         equal_weight = self.get_equal_weight_portfolio()
         
         summary = pd.DataFrame({
@@ -317,6 +379,12 @@ class PortfolioOptimizer:
                 'Volatility (%)': min_vol['volatility'] * 100,
                 'Sharpe Ratio': min_vol['sharpe_ratio'],
                 **{k: v * 100 for k, v in min_vol['weights'].items()}
+            },
+            'Risk Parity': {
+                'Return (%)': risk_parity['return'] * 100,
+                'Volatility (%)': risk_parity['volatility'] * 100,
+                'Sharpe Ratio': risk_parity['sharpe_ratio'],
+                **{k: v * 100 for k, v in risk_parity['weights'].items()}
             },
             'Equal Weight': {
                 'Return (%)': equal_weight['return'] * 100,

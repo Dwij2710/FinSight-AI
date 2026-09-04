@@ -5,27 +5,33 @@ import { Bot, Newspaper, Zap, CheckCircle, AlertCircle, ExternalLink, Activity, 
 import { SentimentData, TradeSignalData } from '../lib/types';
 import { getNewsSentiment, getTradeSignal } from '../lib/api';
 import { AllocationBars } from './Common/Charts';
+import { ErrorBanner } from './Common/ErrorBanner';
 
 export function AiInsightsView({ ticker }: { ticker: string }) {
   const [sentiment, setSentiment] = useState<SentimentData | null>(null);
   const [signal, setSignal] = useState<TradeSignalData | null>(null);
   const [loadingSentiment, setLoadingSentiment] = useState(false);
   const [loadingSignal, setLoadingSignal] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchInsights = async () => {
     setLoadingSentiment(true);
     setLoadingSignal(true);
+    setError(null);
 
-    const [sentRes, sigRes] = await Promise.all([
-      getNewsSentiment(ticker),
-      getTradeSignal(ticker)
-    ]);
-
-    setSentiment(sentRes.data);
-    setLoadingSentiment(false);
-
-    setSignal(sigRes.data);
-    setLoadingSignal(false);
+    try {
+      const [sentRes, sigRes] = await Promise.all([
+        getNewsSentiment(ticker),
+        getTradeSignal(ticker)
+      ]);
+      setSentiment(sentRes.data);
+      setSignal(sigRes.data);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to fetch AI insights.');
+    } finally {
+      setLoadingSentiment(false);
+      setLoadingSignal(false);
+    }
   };
 
   useEffect(() => {
@@ -48,6 +54,16 @@ export function AiInsightsView({ ticker }: { ticker: string }) {
           Deep learning FinBERT financial sentiment and multi-indicator machine learning directional trade signals.
         </p>
       </div>
+
+      {error && (
+        <ErrorBanner
+          title="AI Pipeline Notice"
+          error={error}
+          onRetry={fetchInsights}
+          onDismiss={() => setError(null)}
+          suggestedAction="Ensure the backend service is running and the ticker has news coverage."
+        />
+      )}
 
       {/* Signal Banner */}
       {signal && (

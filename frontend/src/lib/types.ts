@@ -69,6 +69,17 @@ export interface PortfolioData {
     sharpe_ratio: number;
     weights: Record<string, number>;
   };
+  risk_parity?: {
+    return: number;
+    volatility: number;
+    sharpe_ratio: number;
+    weights: Record<string, number>;
+  };
+  benchmark_info?: {
+    ticker: string;
+    name: string;
+    risk_free_rate_pct: number;
+  };
   efficient_frontier: {
     volatility: number[];
     return: number[];
@@ -193,3 +204,36 @@ export interface TftData {
     series: Record<string, number[]>;
   };
 }
+
+export interface SavedPortfolioItem {
+  id: number;
+  portfolio_id: number;
+  ticker: string;
+  target_weight: number;
+  asset_class?: string;
+}
+
+export interface SavedPortfolio {
+  id: number;
+  name: string;
+  description?: string;
+  created_at: string;
+  updated_at: string;
+  items: SavedPortfolioItem[];
+}
+
+export interface WatchlistItem {
+  id: number;
+  watchlist_id: number;
+  ticker: string;
+  notes?: string;
+  added_at: string;
+}
+
+export interface Watchlist {
+  id: number;
+  name: string;
+  created_at: string;
+  items: WatchlistItem[];
+}
+

@@ -1,277 +1,250 @@
 """
 Data Fetcher Module
-Handles fetching and preprocessing of historical stock data using yfinance
+Handles fetching, caching, and preprocessing of market data using Polygon.io (US Equities)
+and Yahoo Finance (Global Equities, Indian NSE/BSE, Indices, Commodities).
+Includes an in-memory TTL cache to eliminate redundant network roundtrips.
 """
-import yfinance as yf
-import pandas as pd
-import numpy as np
-from datetime import datetime
 import os
 import sys
+import time
+from datetime import datetime
 from pathlib import Path
+from typing import List, Optional, Tuple, Dict, Any
+
+import numpy as np
+import pandas as pd
+import yfinance as yf
 
 # Add project root to path for config imports
 _PROJECT_ROOT = str(Path(__file__).resolve().parent.parent)
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
+
 from config.config import (
-    STOCK_TICKERS, BENCHMARK_TICKER, 
-    START_DATE_STR, END_DATE_STR, DATA_DIR
+    STOCK_TICKERS, BENCHMARK_TICKER,
+    START_DATE_STR, END_DATE_STR, DATA_DIR,
+    detect_benchmark_ticker, get_risk_free_rate
 )
+from src.polygon_client import PolygonClient
+
+# In-memory TTL cache: {cache_key: (timestamp, data)}
+_IN_MEMORY_CACHE: Dict[str, Tuple[float, Any]] = {}
+_PRICE_CACHE_TTL = 900  # 15 minutes
+
+
+def _get_from_cache(key: str) -> Optional[Any]:
+    if key in _IN_MEMORY_CACHE:
+        ts, val = _IN_MEMORY_CACHE[key]
+        if time.time() - ts < _PRICE_CACHE_TTL:
+            return val.copy() if hasattr(val, 'copy') else val
+        else:
+            del _IN_MEMORY_CACHE[key]
+    return None
+
+
+def _set_in_cache(key: str, val: Any) -> None:
+    _IN_MEMORY_CACHE[key] = (time.time(), val)
 
 
 class DataFetcher:
     """
-    Class to fetch and preprocess stock market data
+    Unified institutional data fetcher with Polygon.io routing,
+    Yahoo Finance global fallback, and fast in-memory caching.
     """
-    
-    def __init__(self, tickers=None, start_date=None, end_date=None):
-        """
-        Initialize DataFetcher with optional custom parameters
-        
-        Args:
-            tickers: List of stock ticker symbols
-            start_date: Start date for data (YYYY-MM-DD format)
-            end_date: End date for data (YYYY-MM-DD format)
-        """
-        self.tickers = tickers or STOCK_TICKERS
+
+    def __init__(self, tickers: Optional[List[str]] = None, start_date: Optional[str] = None, end_date: Optional[str] = None, benchmark: Optional[str] = None):
+        self.tickers = [t.strip().upper() for t in (tickers or STOCK_TICKERS) if t.strip()]
         self.start_date = start_date or START_DATE_STR
         self.end_date = end_date or END_DATE_STR
-        self.benchmark = BENCHMARK_TICKER
-        self.price_data = None
-        self.benchmark_data = None
-        
-    def fetch_stock_data(self, save_to_csv=True):
+        self.benchmark = benchmark or detect_benchmark_ticker(self.tickers)
+        self.polygon_client = PolygonClient()
+        self.price_data: Optional[pd.DataFrame] = None
+        self.benchmark_data: Optional[pd.Series] = None
+
+    @staticmethod
+    def is_us_equity(ticker: str) -> bool:
+        clean = ticker.strip().upper()
+        if clean.startswith("^") or "=" in clean or clean in ["GLD", "USO"]:
+            return False
+        if "." in clean:
+            return False
+        return clean.isalpha() and len(clean) <= 6
+
+    def fetch_single_ticker(self, ticker: str, start_date: Optional[str] = None, end_date: Optional[str] = None) -> pd.DataFrame:
         """
-        Fetch historical adjusted close prices for all stocks
-        
-        Args:
-            save_to_csv: Whether to save data to CSV file
-            
-        Returns:
-            DataFrame with adjusted close prices for all stocks
+        Fetches daily OHLCV bars for a single ticker with caching and provider routing.
+        Returns DataFrame with ['Open', 'High', 'Low', 'Close', 'Volume'] and DatetimeIndex.
         """
-        print(f"Fetching stock data from {self.start_date} to {self.end_date}...")
-        print(f"Stocks: {', '.join(self.tickers)}")
-        
-        # Download data for all tickers
-        # auto_adjust=True often helps to get 'Close' that is actually adjusted
-        data = yf.download(
-            self.tickers,
-            start=self.start_date,
-            end=self.end_date,
-            progress=True,
-            auto_adjust=False  # Explicitly standard behavior
-        )
-        
-        if data.empty:
-            print("ERROR: No data fetched from yfinance.")
-            self.price_data = pd.DataFrame()
+        clean_ticker = ticker.strip().upper()
+        s_date = start_date or self.start_date
+        e_date = end_date or self.end_date
+        cache_key = f"single_{clean_ticker}_{s_date}_{e_date}"
+
+        cached = _get_from_cache(cache_key)
+        if cached is not None:
+            return cached
+
+        df = pd.DataFrame()
+
+        # 1. If US equity, try Polygon.io first
+        if self.is_us_equity(clean_ticker):
+            try:
+                df = self.polygon_client.get_daily_bars(clean_ticker, s_date, e_date)
+            except Exception as e:
+                print(f"[DataFetcher] Polygon.io query error for {clean_ticker}: {e}")
+
+        # 2. If Polygon returned empty (historical limit, international, or rate limit), query Yahoo Finance
+        if df.empty:
+            try:
+                yf_data = yf.download(clean_ticker, start=s_date, end=e_date, progress=False, auto_adjust=False)
+                if not yf_data.empty:
+                    if isinstance(yf_data.columns, pd.MultiIndex):
+                        yf_data.columns = [c[0] for c in yf_data.columns]
+                    
+                    # Deduplicate columns if both Close and Adj Close exist
+                    if 'Adj Close' in yf_data.columns and 'Close' in yf_data.columns:
+                        yf_data = yf_data.drop(columns=['Adj Close'])
+                    elif 'Adj Close' in yf_data.columns and 'Close' not in yf_data.columns:
+                        yf_data = yf_data.rename(columns={'Adj Close': 'Close'})
+                    
+                    # Keep only the first instance of any duplicated column name
+                    yf_data = yf_data.loc[:, ~yf_data.columns.duplicated()]
+                    std_cols = [c for c in ['Open', 'High', 'Low', 'Close', 'Volume'] if c in yf_data.columns]
+                    df = yf_data[std_cols].dropna()
+            except Exception as e:
+                print(f"[DataFetcher] Yahoo Finance query error for {clean_ticker}: {e}")
+
+        if not df.empty:
+            _set_in_cache(cache_key, df)
+
+        return df
+
+    def fetch_stock_data(self, save_to_csv: bool = False) -> pd.DataFrame:
+        """
+        Fetch historical close prices for all configured tickers.
+        Returns a DataFrame of closing prices indexed by Date.
+        """
+        cache_key = f"multi_{'_'.join(sorted(self.tickers))}_{self.start_date}_{self.end_date}"
+        cached = _get_from_cache(cache_key)
+        if cached is not None:
+            self.price_data = cached
             return self.price_data
 
-        # Debug info
-        # print(f"DEBUG: Downloaded data shape: {data.shape}")
-        # print(f"DEBUG: Data columns levels: {data.columns.nlevels}")
-        # if data.columns.nlevels > 0:
-        #    print(f"DEBUG: Level 0: {data.columns.get_level_values(0).unique()}")
-        
-        # Handle different yfinance versions (newer versions use 'Close' instead of 'Adj Close')
-        # Also handle multi-level columns from yfinance
-        try:
-            if isinstance(data.columns, pd.MultiIndex):
-                # Multi-level columns: (Price Type, Ticker)
-                # Check level 0 for price types
-                level0 = data.columns.get_level_values(0)
-                
-                if 'Adj Close' in level0:
-                    self.price_data = data['Adj Close']
-                elif 'Close' in level0:
-                    self.price_data = data['Close']
-                else:
-                    # Fallback: get the first level/group of columns if expected names not found
-                    print("WARNING: Could not find 'Adj Close' or 'Close'. Using first available column group.")
-                    # Assuming the structure is (PriceType, Ticker), we take the first price type
-                    first_type = level0[0]
-                    self.price_data = data[first_type]
-            else:
-                # Flat columns (rare for multiple tickers in new yfinance, but possible for single ticker)
-                # If tickers are columns, it's just one price type (e.g. if we used auto_adjust=True usually)
-                # But if we have (Adj Close, RELIANCE)... wait, that's handled by MultiIndex usually.
-                # If it's just flat columns like ['RELIANCE.NS', 'TCS.NS'] then it IS the price data.
-                
-                # Check if columns are tickers or price types
-                if 'Adj Close' in data.columns:
-                    self.price_data = data[['Adj Close']] # Keep as DF
-                elif 'Close' in data.columns:
-                    self.price_data = data[['Close']]
-                else:
-                    # If columns intersect with tickers, assume it is already price data
-                    if any(col in self.tickers for col in data.columns):
-                        self.price_data = data
+        price_series_dict = {}
+
+        for ticker in self.tickers:
+            df = self.fetch_single_ticker(ticker, self.start_date, self.end_date)
+            if not df.empty and 'Close' in df.columns:
+                close_col = df['Close']
+                if isinstance(close_col, pd.DataFrame):
+                    close_col = close_col.iloc[:, 0]
+                series = close_col.astype(float)
+                series.name = ticker
+                price_series_dict[ticker] = series
+
+        if not price_series_dict:
+            # Fallback batch download
+            try:
+                batch_data = yf.download(self.tickers, start=self.start_date, end=self.end_date, progress=False)
+                if not batch_data.empty:
+                    if isinstance(batch_data.columns, pd.MultiIndex):
+                        level0 = batch_data.columns.get_level_values(0)
+                        if 'Close' in level0:
+                            self.price_data = batch_data['Close']
+                        elif 'Adj Close' in level0:
+                            self.price_data = batch_data['Adj Close']
+                        else:
+                            self.price_data = batch_data.iloc[:, :len(self.tickers)]
                     else:
-                         self.price_data = data # Fallback
+                        self.price_data = batch_data
+            except Exception as e:
+                print(f"[DataFetcher] Batch yfinance download error: {e}")
+                self.price_data = pd.DataFrame()
+        else:
+            self.price_data = pd.DataFrame(price_series_dict)
 
+        if self.price_data is not None and not self.price_data.empty:
+            self.price_data = self._clean_data(self.price_data)
+            _set_in_cache(cache_key, self.price_data)
+
+            if save_to_csv:
+                self._save_to_csv(self.price_data, "stock_prices.csv")
+
+        return self.price_data if self.price_data is not None else pd.DataFrame()
+
+    def fetch_benchmark_data(self, benchmark_ticker: Optional[str] = None, save_to_csv: bool = False) -> pd.Series:
+        """
+        Fetch benchmark index data (e.g. ^GSPC for US, ^NSEI for India).
+        """
+        bench = benchmark_ticker or self.benchmark
+        cache_key = f"bench_{bench}_{self.start_date}_{self.end_date}"
+        cached = _get_from_cache(cache_key)
+        if cached is not None:
+            self.benchmark_data = cached
+            return self.benchmark_data
+
+        try:
+            data = yf.download(bench, start=self.start_date, end=self.end_date, progress=False)
+            if isinstance(data.columns, pd.MultiIndex):
+                if 'Close' in data.columns.get_level_values(0):
+                    self.benchmark_data = data['Close'].iloc[:, 0]
+                else:
+                    self.benchmark_data = data.iloc[:, 0]
+            else:
+                if 'Close' in data.columns:
+                    self.benchmark_data = data['Close']
+                elif 'Adj Close' in data.columns:
+                    self.benchmark_data = data['Adj Close']
+                else:
+                    self.benchmark_data = data.iloc[:, 0]
+
+            if isinstance(self.benchmark_data, pd.DataFrame):
+                self.benchmark_data = self.benchmark_data.iloc[:, 0]
+
+            self.benchmark_data.name = bench
+            self.benchmark_data = self.benchmark_data.dropna().astype(float)
+            _set_in_cache(cache_key, self.benchmark_data)
+
+            if save_to_csv:
+                bench_df = pd.DataFrame({bench: self.benchmark_data})
+                self._save_to_csv(bench_df, "benchmark_prices.csv")
+
+            return self.benchmark_data
         except Exception as e:
-            print(f"ERROR: Failed to parse data structure: {e}")
-            # Last resort fallback
-            self.price_data = data.iloc[:, :len(self.tickers)] # Guessing
+            print(f"[DataFetcher] Failed to fetch benchmark {bench}: {e}")
+            return pd.Series(dtype=float, name=bench)
 
-        # Ensure self.price_data is a DataFrame
-        if isinstance(self.price_data, pd.Series):
-            self.price_data = self.price_data.to_frame()
-            
-        # Clean data
-        self.price_data = self._clean_data(self.price_data)
-        
-        if save_to_csv and not self.price_data.empty:
-            self._save_to_csv(self.price_data, "stock_prices.csv")
-            
-        print(f"Successfully fetched data for {len(self.price_data.columns)} stocks")
-        if not self.price_data.empty:
-            print(f"Date range: {self.price_data.index.min()} to {self.price_data.index.max()}")
-            print(f"Total trading days: {len(self.price_data)}")
-        else:
-            print("WARNING: Data is empty after processing.")
-        
-        return self.price_data
-    
-    def fetch_benchmark_data(self, save_to_csv=True):
-        """
-        Fetch benchmark index (NIFTY 50) data
-        
-        Args:
-            save_to_csv: Whether to save data to CSV file
-            
-        Returns:
-            Series with benchmark adjusted close prices
-        """
-        print(f"\nFetching benchmark data ({self.benchmark})...")
-        
-        data = yf.download(
-            self.benchmark,
-            start=self.start_date,
-            end=self.end_date,
-            progress=True
-        )
-        
-        # Handle different yfinance versions and column structures
-        if isinstance(data.columns, pd.MultiIndex):
-            # Multi-level columns
-            if 'Close' in data.columns.get_level_values(0):
-                self.benchmark_data = data['Close'].iloc[:, 0]
-            else:
-                self.benchmark_data = data.iloc[:, 0]
-        else:
-            # Single level columns
-            if 'Adj Close' in data.columns:
-                self.benchmark_data = data['Adj Close']
-            elif 'Close' in data.columns:
-                self.benchmark_data = data['Close']
-            else:
-                self.benchmark_data = data.iloc[:, 0]
-        
-        # Ensure it's a Series
-        if isinstance(self.benchmark_data, pd.DataFrame):
-            self.benchmark_data = self.benchmark_data.iloc[:, 0]
-        
-        self.benchmark_data.name = 'NIFTY50'
-        
-        # Clean data
-        self.benchmark_data = self.benchmark_data.dropna()
-        
-        if save_to_csv:
-            # Convert to DataFrame for saving
-            benchmark_df = pd.DataFrame({'NIFTY50': self.benchmark_data})
-            self._save_to_csv(benchmark_df, "benchmark_prices.csv")
-            
-        print(f"Successfully fetched benchmark data")
-        
-        return self.benchmark_data
-    
-    def _clean_data(self, data):
-        """
-        Clean and preprocess the data
-        
-        Args:
-            data: Raw price DataFrame
-            
-        Returns:
-            Cleaned DataFrame
-        """
+    def _clean_data(self, data: pd.DataFrame) -> pd.DataFrame:
         if data.empty:
             return data
-            
-        # First, drop columns that are completely empty/NaN (e.g. failed downloads)
         data = data.dropna(axis=1, how='all')
-        
-        # Forward fill missing values (for holidays, etc.)
-        data = data.ffill()
-        
-        # Backward fill any remaining NaN at the start
-        data = data.bfill()
-        
-        # Drop any remaining rows with NaN
-        data = data.dropna()
-        
-        # Sort by date
+        data = data.ffill().bfill().dropna()
         data = data.sort_index()
-        
         return data
-    
-    def _save_to_csv(self, data, filename):
-        """
-        Save data to CSV file
-        
-        Args:
-            data: DataFrame to save
-            filename: Name of the file
-        """
-        # Create data directory if it doesn't exist
+
+    def _save_to_csv(self, data: pd.DataFrame, filename: str) -> None:
         if not os.path.exists(DATA_DIR):
-            os.makedirs(DATA_DIR)
-            
+            os.makedirs(DATA_DIR, exist_ok=True)
         filepath = os.path.join(DATA_DIR, filename)
         data.to_csv(filepath)
-        print(f"Data saved to {filepath}")
-    
-    def get_stock_info(self, ticker):
-        """
-        Get detailed information about a stock
-        
-        Args:
-            ticker: Stock ticker symbol
-            
-        Returns:
-            Dictionary with stock information
-        """
-        stock = yf.Ticker(ticker)
-        return stock.info
-    
-    def get_all_data(self):
-        """
-        Fetch both stock and benchmark data
-        
-        Returns:
-            Tuple of (stock_prices, benchmark_prices)
-        """
-        stock_data = self.fetch_stock_data()
-        benchmark_data = self.fetch_benchmark_data()
-        
-        # Align dates
-        common_dates = stock_data.index.intersection(benchmark_data.index)
-        stock_data = stock_data.loc[common_dates]
-        benchmark_data = benchmark_data.loc[common_dates]
-        
-        return stock_data, benchmark_data
 
+    def get_stock_info(self, ticker: str) -> Dict[str, Any]:
+        """
+        Get company information using Polygon details or Yahoo Finance info.
+        """
+        clean = ticker.strip().upper()
+        if self.is_us_equity(clean):
+            details = self.polygon_client.get_ticker_details(clean)
+            if details:
+                return details
+        try:
+            stock = yf.Ticker(clean)
+            return stock.info
+        except Exception:
+            return {"symbol": clean}
 
-if __name__ == "__main__":
-    # Test the data fetcher
-    fetcher = DataFetcher()
-    stocks, benchmark = fetcher.get_all_data()
-    
-    print("\n" + "="*50)
-    print("Stock Prices Summary:")
-    print(stocks.describe())
-    print("\nBenchmark Summary:")
-    print(benchmark.describe())
+    def get_all_data(self) -> Tuple[pd.DataFrame, pd.Series]:
+        stocks = self.fetch_stock_data()
+        bench = self.fetch_benchmark_data()
+        common_dates = stocks.index.intersection(bench.index)
+        return stocks.loc[common_dates], bench.loc[common_dates]

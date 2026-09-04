@@ -39,11 +39,30 @@ START_DATE = END_DATE - timedelta(days=3*365)
 START_DATE_STR = START_DATE.strftime("%Y-%m-%d")
 END_DATE_STR = END_DATE.strftime("%Y-%m-%d")
 
-# Benchmark index (NIFTY 50)
-BENCHMARK_TICKER = "^NSEI"
+# Benchmark index defaults
+BENCHMARK_TICKER = "^GSPC"  # Default global institutional benchmark (S&P 500)
+BENCHMARK_NIFTY = "^NSEI"   # Indian equity benchmark (NIFTY 50)
+BENCHMARK_SP500 = "^GSPC"   # US equity benchmark (S&P 500)
 
-# Risk-free rate (India 10-year government bond yield approximately)
-RISK_FREE_RATE = 0.07  # 7% annual
+def detect_benchmark_ticker(tickers):
+    """
+    Dynamically select appropriate benchmark index based on asset universe.
+    """
+    if not tickers:
+        return BENCHMARK_SP500
+    has_indian = any(t.endswith(".NS") or t.endswith(".BO") for t in tickers)
+    return BENCHMARK_NIFTY if has_indian else BENCHMARK_SP500
+
+def get_risk_free_rate(benchmark_ticker="^GSPC"):
+    """
+    Return institutional annual risk-free rate based on market domicile.
+    """
+    if benchmark_ticker == BENCHMARK_NIFTY:
+        return 0.070  # India 10Y G-Sec yield ~ 7.0%
+    return 0.043     # US 10Y Treasury yield ~ 4.3%
+
+# Risk-free rate default
+RISK_FREE_RATE = 0.043
 
 # Trading days per year
 TRADING_DAYS = 252

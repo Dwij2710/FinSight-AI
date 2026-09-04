@@ -6,9 +6,12 @@ import { ForecastData } from '../lib/types';
 import { getForecast } from '../lib/api';
 import { MultiLineChart } from './Common/Charts';
 
+import { ErrorBanner } from './Common/ErrorBanner';
+
 export function ForecastView({ ticker }: { ticker: string }) {
   const [data, setData] = useState<ForecastData | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [isDemo, setIsDemo] = useState(false);
   const [activeSubTab, setActiveSubTab] = useState<'forecast' | 'decomp' | 'backtest'>('forecast');
 
@@ -21,17 +24,24 @@ export function ForecastView({ ticker }: { ticker: string }) {
 
   const runModel = async () => {
     setLoading(true);
-    const res = await getForecast({
-      ticker,
-      p,
-      d,
-      q,
-      forecast_period: forecastDays,
-      run_backtest: runBacktest
-    });
-    setData(res.data);
-    setIsDemo(!!res.isDemo);
-    setLoading(false);
+    setError(null);
+    try {
+      const res = await getForecast({
+        ticker,
+        p,
+        d,
+        q,
+        forecast_period: forecastDays,
+        run_backtest: runBacktest
+      });
+      setData(res.data);
+      setIsDemo(!!res.isDemo);
+    } catch (err: any) {
+      setError(err?.message || 'SARIMAX quantitative forecast failed.');
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -86,6 +96,17 @@ export function ForecastView({ ticker }: { ticker: string }) {
           </span>
         )}
       </div>
+
+      {/* Error Banner */}
+      {error && (
+        <ErrorBanner
+          title="Forecasting Pipeline Notice"
+          error={error}
+          onRetry={runModel}
+          onDismiss={() => setError(null)}
+          suggestedAction="Verify that the ticker symbol exists or try smaller (p, d, q) orders."
+        />
+      )}
 
       {/* Metrics Row */}
       {data && (

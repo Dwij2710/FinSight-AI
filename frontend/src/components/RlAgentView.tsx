@@ -5,10 +5,12 @@ import { Cpu, Play, Award, ArrowUpRight, TrendingDown, Target, Zap, ShieldAlert 
 import { RlSimulationData } from '../lib/types';
 import { simulateRlAgent } from '../lib/api';
 import { MultiLineChart } from './Common/Charts';
+import { ErrorBanner } from './Common/ErrorBanner';
 
 export function RlAgentView({ ticker }: { ticker: string }) {
   const [data, setData] = useState<RlSimulationData | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Settings
   const [initialBalance, setInitialBalance] = useState(10000);
@@ -18,15 +20,22 @@ export function RlAgentView({ ticker }: { ticker: string }) {
 
   const runSimulation = async () => {
     setLoading(true);
-    const res = await simulateRlAgent({
-      ticker,
-      initial_balance: initialBalance,
-      algo_type: algoType,
-      action_type: actionType,
-      risk_profile: riskProfile
-    });
-    setData(res.data);
-    setLoading(false);
+    setError(null);
+    try {
+      const res = await simulateRlAgent({
+        ticker,
+        initial_balance: initialBalance,
+        algo_type: algoType,
+        action_type: actionType,
+        risk_profile: riskProfile
+      });
+      setData(res.data);
+    } catch (err: any) {
+      setError(err?.message || 'Reinforcement learning trading simulation failed.');
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -56,6 +65,16 @@ export function RlAgentView({ ticker }: { ticker: string }) {
           </span>
         )}
       </div>
+
+      {error && (
+        <ErrorBanner
+          title="RL Simulation Pipeline Notice"
+          error={error}
+          onRetry={runSimulation}
+          onDismiss={() => setError(null)}
+          suggestedAction="Verify that the ticker has sufficient historical price bars."
+        />
+      )}
 
       {/* Quant Metric Cards */}
       {data && (

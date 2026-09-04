@@ -1,17 +1,18 @@
 'use client';
 
 import React, { useState } from 'react';
-import { TrendingUp, PieChart, Bot, Cpu, Globe, Info, Search } from 'lucide-react';
+import { TrendingUp, PieChart, Bot, Cpu, Globe, Info, Search, Bookmark } from 'lucide-react';
 import { Header } from '../components/Header';
 import { ForecastView } from '../components/ForecastView';
 import { PortfolioView } from '../components/PortfolioView';
 import { AiInsightsView } from '../components/AiInsightsView';
 import { RlAgentView } from '../components/RlAgentView';
 import { TftView } from '../components/TftView';
+import { WatchlistView } from '../components/WatchlistView';
 import { AboutView } from '../components/AboutView';
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<'forecast' | 'portfolio' | 'ai' | 'rl' | 'tft' | 'about'>('forecast');
+  const [activeTab, setActiveTab] = useState<'forecast' | 'portfolio' | 'watchlists' | 'ai' | 'rl' | 'tft' | 'about'>('forecast');
   const [ticker, setTicker] = useState('AAPL');
   const [searchInput, setSearchInput] = useState('');
 
@@ -60,6 +61,15 @@ export default function Home() {
             </button>
 
             <button
+              id="tab-watchlists"
+              className={`nav-tab-btn ${activeTab === 'watchlists' ? 'active' : ''}`}
+              onClick={() => setActiveTab('watchlists')}
+            >
+              <Bookmark size={16} />
+              <span>Watchlists</span>
+            </button>
+
+            <button
               id="tab-ai"
               className={`nav-tab-btn ${activeTab === 'ai' ? 'active' : ''}`}
               onClick={() => setActiveTab('ai')}
@@ -97,7 +107,7 @@ export default function Home() {
           </nav>
 
           {/* Active Ticker Indicator & Search */}
-          {activeTab !== 'portfolio' && activeTab !== 'about' && (
+          {activeTab !== 'portfolio' && activeTab !== 'watchlists' && activeTab !== 'about' && (
             <form onSubmit={handleSearchSubmit} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <div style={{
                 display: 'flex',
@@ -139,6 +149,17 @@ export default function Home() {
         {/* View Routing */}
         {activeTab === 'forecast' && <ForecastView ticker={ticker} />}
         {activeTab === 'portfolio' && <PortfolioView />}
+        {activeTab === 'watchlists' && (
+          <WatchlistView
+            onSelectTicker={(t) => {
+              setTicker(t);
+              setActiveTab('forecast');
+            }}
+            onOpenPortfolio={(tickers) => {
+              setActiveTab('portfolio');
+            }}
+          />
+        )}
         {activeTab === 'ai' && <AiInsightsView ticker={ticker} />}
         {activeTab === 'rl' && <RlAgentView ticker={ticker} />}
         {activeTab === 'tft' && <TftView ticker={ticker} />}
