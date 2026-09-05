@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Bot, Newspaper, Zap, CheckCircle, AlertCircle, ExternalLink, Activity, Award } from 'lucide-react';
+import { Bot, Newspaper, Zap, CheckCircle, AlertCircle, ExternalLink, Activity, Award, Info } from 'lucide-react';
 import { SentimentData, TradeSignalData } from '../lib/types';
 import { getNewsSentiment, getTradeSignal } from '../lib/api';
 import { AllocationBars } from './Common/Charts';
@@ -13,6 +13,7 @@ export function AiInsightsView({ ticker }: { ticker: string }) {
   const [loadingSentiment, setLoadingSentiment] = useState(false);
   const [loadingSignal, setLoadingSignal] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isDemo, setIsDemo] = useState(false);
 
   const fetchInsights = async () => {
     setLoadingSentiment(true);
@@ -26,6 +27,7 @@ export function AiInsightsView({ ticker }: { ticker: string }) {
       ]);
       setSentiment(sentRes.data);
       setSignal(sigRes.data);
+      setIsDemo(Boolean(sentRes.isDemo || sigRes.isDemo));
     } catch (err: any) {
       setError(err?.message || 'Failed to fetch AI insights.');
     } finally {
@@ -46,13 +48,20 @@ export function AiInsightsView({ ticker }: { ticker: string }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       {/* Title */}
-      <div>
-        <h2 style={{ fontSize: '1.6rem', marginBottom: 4 }}>
-          Advanced AI <span className="text-gradient">Insights</span>
-        </h2>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-          Deep learning FinBERT financial sentiment and multi-indicator machine learning directional trade signals.
-        </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <h2 style={{ fontSize: '1.6rem', marginBottom: 4 }}>
+            Advanced AI <span className="text-gradient">Insights</span>
+          </h2>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+            Deep learning FinBERT financial sentiment and multi-indicator machine learning directional trade signals.
+          </p>
+        </div>
+        {isDemo && (
+          <span className="badge badge-purple" style={{ padding: '6px 14px' }}>
+            <Info size={14} /> AI Simulation Engine
+          </span>
+        )}
       </div>
 
       {error && (

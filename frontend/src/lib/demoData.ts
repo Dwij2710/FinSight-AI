@@ -7,14 +7,16 @@ import {
   SentimentData,
   TradeSignalData,
   RlSimulationData,
-  TftData
+  TftData,
+  Watchlist,
+  SavedPortfolio
 } from './types';
 
+// ==================== PORTFOLIO DEMO ====================
 export function generateDemoPortfolio(tickers: string[]): PortfolioData {
   const valid = tickers.length >= 2 ? tickers : ['AAPL', 'MSFT', 'NVDA'];
   const n = valid.length;
 
-  // Generate normalized weights for strategies
   const equalWeight = 1 / n;
   const sharpeWeights: Record<string, number> = {};
   const volWeights: Record<string, number> = {};
@@ -37,7 +39,6 @@ export function generateDemoPortfolio(tickers: string[]): PortfolioData {
     volWeights[t] = Number((volWeights[t] / sumVol).toFixed(4));
   });
 
-  // Correlation matrix
   const matrixValues: number[][] = [];
   for (let i = 0; i < n; i++) {
     const row: number[] = [];
@@ -51,7 +52,6 @@ export function generateDemoPortfolio(tickers: string[]): PortfolioData {
     matrixValues.push(row);
   }
 
-  // Efficient Frontier
   const frontierVol: number[] = [];
   const frontierRet: number[] = [];
   for (let i = 0; i < 30; i++) {
@@ -61,7 +61,6 @@ export function generateDemoPortfolio(tickers: string[]): PortfolioData {
     frontierRet.push(Number(r.toFixed(4)));
   }
 
-  // Random Portfolios
   const randVol: number[] = [];
   const randRet: number[] = [];
   const randSharpe: number[] = [];
@@ -74,7 +73,6 @@ export function generateDemoPortfolio(tickers: string[]): PortfolioData {
     randSharpe.push(Number(s.toFixed(2)));
   }
 
-  // Cumulative Growth
   const dates: string[] = [];
   const series: Record<string, number[]> = {
     'Max Sharpe': [],
@@ -164,6 +162,7 @@ export function generateDemoPortfolio(tickers: string[]): PortfolioData {
   };
 }
 
+// ==================== FORECAST DEMO ====================
 export function generateDemoForecast(ticker: string): ForecastData {
   const sym = ticker.toUpperCase().trim() || 'AAPL';
   const history: { date: string; actual: number; fitted: number }[] = [];
@@ -213,4 +212,283 @@ export function generateDemoForecast(ticker: string): ForecastData {
     predictions,
     summary: `Quantitative SARIMAX model fitted for ${sym} across 120 historical bars. Residual diagnostics confirm stationary holdout backtesting.`
   };
+}
+
+// ==================== AI INSIGHTS DEMO ====================
+export function generateDemoSentiment(ticker: string): SentimentData {
+  const sym = ticker.toUpperCase().trim() || 'AAPL';
+  return {
+    ticker: sym,
+    model_used: 'FinBERT Institutional NLP Sentiment Classifier',
+    overall_score: 0.68,
+    overall_label: 'Positive',
+    counts: {
+      Positive: 7,
+      Neutral: 3,
+      Negative: 1
+    },
+    articles: [
+      {
+        Title: `${sym} Expands Enterprise Cloud & AI Infrastructure with Record Margin Growth`,
+        Publisher: 'Bloomberg Financial Markets',
+        Sentiment: 'Positive',
+        'Sentiment Score': 0.84,
+        Link: '#'
+      },
+      {
+        Title: `Institutional Outflow Stabilizes as ${sym} Rebalances Capital Allocation`,
+        Publisher: 'Reuters Global Equities',
+        Sentiment: 'Positive',
+        'Sentiment Score': 0.72,
+        Link: '#'
+      },
+      {
+        Title: `Quarterly Earnings Preview: Analysts Project 14% EPS Acceleration for ${sym}`,
+        Publisher: 'Wall Street Quantitative Journal',
+        Sentiment: 'Positive',
+        'Sentiment Score': 0.76,
+        Link: '#'
+      },
+      {
+        Title: `Macro Interest Rate Sensitivity Across Tech and Industrial Sector Peers`,
+        Publisher: 'Financial Times Intelligence',
+        Sentiment: 'Neutral',
+        'Sentiment Score': 0.12,
+        Link: '#'
+      },
+      {
+        Title: `Supply Chain Diversification Strategy Mitigates Component Lead Times`,
+        Publisher: 'Barron\'s Capital Review',
+        Sentiment: 'Positive',
+        'Sentiment Score': 0.65,
+        Link: '#'
+      }
+    ]
+  };
+}
+
+export function generateDemoSignal(ticker: string): TradeSignalData {
+  const sym = ticker.toUpperCase().trim() || 'AAPL';
+  return {
+    ticker: sym,
+    signal: 'Strong Buy',
+    confidence_pct: 88.4,
+    accuracy_pct: 81.2,
+    is_strong: true,
+    feature_importance: [
+      { feature: 'RSI Momentum (14D)', importance: 0.34 },
+      { feature: 'MACD Divergence Histogram', importance: 0.28 },
+      { feature: '20-Day SMA Mean-Reversion', importance: 0.22 },
+      { feature: 'Bollinger %B Volatility Band', importance: 0.16 }
+    ],
+    technical_indicators: {
+      rsi: 58.4,
+      sma_20: 184.2,
+      sma_50: 178.6
+    }
+  };
+}
+
+// ==================== RL AGENT DEMO ====================
+export function generateDemoRl(
+  ticker: string,
+  initialBalance: number = 10000,
+  algoType: string = 'PPO'
+): RlSimulationData {
+  const sym = ticker.toUpperCase().trim() || 'AAPL';
+  const history = [];
+  const now = new Date();
+
+  let agentBalance = initialBalance;
+  let benchmarkBalance = initialBalance;
+  let price = 150.0;
+
+  for (let i = 50; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().slice(0, 10);
+
+    const priceChange = (Math.random() - 0.46) * 3.2;
+    price = Math.max(10, price + priceChange);
+
+    const agentAlpha = 0.0025 + (Math.random() - 0.45) * 0.015;
+    agentBalance *= 1 + agentAlpha;
+    benchmarkBalance *= 1 + (priceChange / price);
+
+    const actions = ['BUY', 'HOLD', 'HOLD', 'BUY', 'SELL', 'HOLD'];
+    const act = actions[i % actions.length];
+
+    history.push({
+      date: dateStr,
+      price: Number(price.toFixed(2)),
+      agent_net_worth: Number(agentBalance.toFixed(2)),
+      benchmark_net_worth: Number(benchmarkBalance.toFixed(2)),
+      action: act
+    });
+  }
+
+  const profit = Number((agentBalance - initialBalance).toFixed(2));
+  const profitPct = Number(((profit / initialBalance) * 100).toFixed(2));
+  const benchProfitPct = Number((((benchmarkBalance - initialBalance) / initialBalance) * 100).toFixed(2));
+
+  return {
+    ticker: sym,
+    algo_type: algoType,
+    action_type: 'Continuous (Fractional Sizing)',
+    risk_profile: 'Aggressive Alpha',
+    engine: `${algoType} Actor-Critic Policy (Gymnasium Env)`,
+    initial_balance: initialBalance,
+    final_balance: Number(agentBalance.toFixed(2)),
+    profit,
+    profit_pct: profitPct,
+    benchmark_profit_pct: benchProfitPct,
+    max_drawdown_pct: -6.4,
+    win_rate_pct: 66.7,
+    total_trades: 18,
+    history
+  };
+}
+
+// ==================== TFT DEMO ====================
+export function generateDemoTft(ticker: string): TftData {
+  const sym = ticker.toUpperCase().trim() || 'AAPL';
+  const now = new Date();
+  const dates: string[] = [];
+  const series: Record<string, number[]> = {
+    [sym]: [],
+    'S&P 500': [],
+    '10Y Yield': [],
+    'Crude Oil': [],
+    'VIX': []
+  };
+
+  let p = 180;
+  let sp = 5000;
+  let yld = 4.2;
+  let oil = 78;
+  let vix = 14;
+
+  for (let i = 60; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    dates.push(d.toISOString().slice(0, 10));
+
+    p += (Math.random() - 0.47) * 2.5;
+    sp += (Math.random() - 0.47) * 35;
+    yld += (Math.random() - 0.5) * 0.05;
+    oil += (Math.random() - 0.5) * 1.2;
+    vix = Math.max(10, vix + (Math.random() - 0.5) * 0.8);
+
+    series[sym].push(Number(p.toFixed(2)));
+    series['S&P 500'].push(Number(sp.toFixed(2)));
+    series['10Y Yield'].push(Number(yld.toFixed(2)));
+    series['Crude Oil'].push(Number(oil.toFixed(2)));
+    series['VIX'].push(Number(vix.toFixed(2)));
+  }
+
+  return {
+    ticker: sym,
+    current_price: 184.5,
+    sp500_price: 5210.4,
+    vix: 13.8,
+    regime: 'Growth Expansion Regime',
+    regime_desc: 'Accommodative multi-factor regime: low systemic volatility and resilient corporate credit margins.',
+    attention_weights: [
+      { factor: 'S&P 500 Equity Momentum', weight_pct: 35 },
+      { factor: '10-Year Treasury Yield Shift', weight_pct: 28 },
+      { factor: 'WTI Crude Oil Volatility', weight_pct: 18 },
+      { factor: 'VIX Volatility Term Structure', weight_pct: 12 },
+      { factor: 'Gold Safe-Haven Demand', weight_pct: 7 }
+    ],
+    anomaly_analysis: {
+      is_anomaly: false,
+      risk_score: 14.8,
+      message: 'Isolation Forest anomaly detector reports normal market conditions within 95% Gaussian confidence intervals.'
+    },
+    lookalike: {
+      matched_date: '2023-11-14',
+      similarity: 94.6,
+      future_return: 7.4
+    },
+    probabilistic_forecast: {
+      predicted: 192.4,
+      lower: 181.2,
+      upper: 203.6,
+      confidence: 90
+    },
+    scenarios: [
+      { scenario: 'Macro Expansion (Soft Landing)', projected_price: 198.5, impact_pct: 7.6 },
+      { scenario: 'Hawkish Fed Rate Hike (+50bps)', projected_price: 174.2, impact_pct: -5.6 },
+      { scenario: 'Geopolitical Energy Surge (+15% Oil)', projected_price: 178.9, impact_pct: -3.0 }
+    ],
+    macro_correlations: [
+      { indicator: 'S&P 500 Index', correlation: 0.84, latest_value: 5210.4 },
+      { indicator: 'US 10-Year Treasury', correlation: -0.38, latest_value: 4.22 },
+      { indicator: 'Crude Oil (WTI)', correlation: 0.16, latest_value: 78.4 },
+      { indicator: 'CBOE VIX Volatility', correlation: -0.72, latest_value: 13.8 }
+    ],
+    macro_chart: {
+      dates,
+      series
+    }
+  };
+}
+
+// ==================== WATCHLISTS DEMO ====================
+export function generateDemoWatchlists(): Watchlist[] {
+  return [
+    {
+      id: 1,
+      name: '🇺🇸 US Big Tech Leaders',
+      created_at: new Date().toISOString(),
+      items: [
+        { id: 101, watchlist_id: 1, ticker: 'AAPL', notes: 'Core holding, expanding services revenue', added_at: new Date().toISOString() },
+        { id: 102, watchlist_id: 1, ticker: 'NVDA', notes: 'Enterprise GPU infrastructure leader', added_at: new Date().toISOString() },
+        { id: 103, watchlist_id: 1, ticker: 'MSFT', notes: 'Azure Cloud & enterprise AI software', added_at: new Date().toISOString() },
+        { id: 104, watchlist_id: 1, ticker: 'GOOGL', notes: 'Search ad momentum & Gemini LLM', added_at: new Date().toISOString() },
+        { id: 105, watchlist_id: 1, ticker: 'AMZN', notes: 'AWS cloud margin expansion & retail logistics', added_at: new Date().toISOString() }
+      ]
+    },
+    {
+      id: 2,
+      name: '🇮🇳 NIFTY Top 5 Bluechips',
+      created_at: new Date().toISOString(),
+      items: [
+        { id: 201, watchlist_id: 2, ticker: 'RELIANCE.NS', notes: 'Retail & telecom conglomerate leadership', added_at: new Date().toISOString() },
+        { id: 202, watchlist_id: 2, ticker: 'TCS.NS', notes: 'IT services & multi-year enterprise contracts', added_at: new Date().toISOString() },
+        { id: 203, watchlist_id: 2, ticker: 'HDFCBANK.NS', notes: 'Private banking loan book expansion', added_at: new Date().toISOString() },
+        { id: 204, watchlist_id: 2, ticker: 'INFY.NS', notes: 'Digital transformation consulting', added_at: new Date().toISOString() },
+        { id: 205, watchlist_id: 2, ticker: 'ICICIBANK.NS', notes: 'High return on equity private lender', added_at: new Date().toISOString() }
+      ]
+    },
+    {
+      id: 3,
+      name: '🌐 Macro Hedges & Commodities',
+      created_at: new Date().toISOString(),
+      items: [
+        { id: 301, watchlist_id: 3, ticker: 'GLD', notes: 'Central bank gold accumulation reserve', added_at: new Date().toISOString() },
+        { id: 302, watchlist_id: 3, ticker: 'USO', notes: 'Crude oil supply/demand geopolitics', added_at: new Date().toISOString() },
+        { id: 303, watchlist_id: 3, ticker: 'TLT', notes: '20+ Year Treasury Bond duration hedge', added_at: new Date().toISOString() }
+      ]
+    }
+  ];
+}
+
+// ==================== SAVED PORTFOLIOS DEMO ====================
+export function generateDemoSavedPortfolios(): SavedPortfolio[] {
+  return [
+    {
+      id: 1,
+      name: 'Institutional Equal Risk Parity',
+      description: 'Balanced risk contributions across equities and defensive hedges',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      items: [
+        { id: 1, portfolio_id: 1, ticker: 'AAPL', target_weight: 0.25, asset_class: 'Equity' },
+        { id: 2, portfolio_id: 1, ticker: 'MSFT', target_weight: 0.25, asset_class: 'Equity' },
+        { id: 3, portfolio_id: 1, ticker: 'NVDA', target_weight: 0.25, asset_class: 'Equity' },
+        { id: 4, portfolio_id: 1, ticker: 'GOOGL', target_weight: 0.25, asset_class: 'Equity' }
+      ]
+    }
+  ];
 }

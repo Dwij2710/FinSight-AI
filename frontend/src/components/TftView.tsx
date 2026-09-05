@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Globe, AlertTriangle, Layers, Compass, BarChart, History, CheckCircle } from 'lucide-react';
+import { Globe, AlertTriangle, Layers, Compass, BarChart, History, CheckCircle, Info } from 'lucide-react';
 import { TftData } from '../lib/types';
 import { analyzeTft } from '../lib/api';
 import { RiskGauge, AllocationBars, MultiLineChart } from './Common/Charts';
@@ -11,6 +11,7 @@ export function TftView({ ticker }: { ticker: string }) {
   const [data, setData] = useState<TftData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isDemo, setIsDemo] = useState(false);
 
   const fetchTft = async () => {
     setLoading(true);
@@ -18,6 +19,7 @@ export function TftView({ ticker }: { ticker: string }) {
     try {
       const res = await analyzeTft(ticker);
       setData(res.data);
+      setIsDemo(Boolean(res.isDemo));
     } catch (err: any) {
       setError(err?.message || 'Failed to compute multivariate factor regime model.');
       setData(null);
@@ -38,13 +40,20 @@ export function TftView({ ticker }: { ticker: string }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       {/* Title */}
-      <div>
-        <h2 style={{ fontSize: '1.6rem', marginBottom: 4 }}>
-          Multi-Variate <span className="text-gradient">Transformer (TFT)</span>
-        </h2>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-          Correlates multiple macroeconomic factors simultaneously: S&P 500, VIX, 10Y Yields, Crude Oil, and Gold.
-        </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <h2 style={{ fontSize: '1.6rem', marginBottom: 4 }}>
+            Multi-Variate <span className="text-gradient">Transformer (TFT)</span>
+          </h2>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+            Correlates multiple macroeconomic factors simultaneously: S&P 500, VIX, 10Y Yields, Crude Oil, and Gold.
+          </p>
+        </div>
+        {isDemo && (
+          <span className="badge badge-purple" style={{ padding: '6px 14px' }}>
+            <Info size={14} /> AI Simulation Engine
+          </span>
+        )}
       </div>
 
       {error && (

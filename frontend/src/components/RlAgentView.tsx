@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Cpu, Play, Award, ArrowUpRight, TrendingDown, Target, Zap, ShieldAlert } from 'lucide-react';
+import { Cpu, Play, Award, ArrowUpRight, TrendingDown, Target, Zap, ShieldAlert, Info } from 'lucide-react';
 import { RlSimulationData } from '../lib/types';
 import { simulateRlAgent } from '../lib/api';
 import { MultiLineChart } from './Common/Charts';
@@ -11,6 +11,7 @@ export function RlAgentView({ ticker }: { ticker: string }) {
   const [data, setData] = useState<RlSimulationData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isDemo, setIsDemo] = useState(false);
 
   // Settings
   const [initialBalance, setInitialBalance] = useState(10000);
@@ -30,6 +31,7 @@ export function RlAgentView({ ticker }: { ticker: string }) {
         risk_profile: riskProfile
       });
       setData(res.data);
+      setIsDemo(Boolean(res.isDemo));
     } catch (err: any) {
       setError(err?.message || 'Reinforcement learning trading simulation failed.');
       setData(null);
@@ -59,11 +61,18 @@ export function RlAgentView({ ticker }: { ticker: string }) {
             Deep RL policy networks (PPO / A2C / DQN) trained in Gymnasium environment to optimize Sharpe and maximize portfolio net worth.
           </p>
         </div>
-        {data && (
-          <span className="badge badge-cyan" style={{ padding: '6px 14px' }}>
-            <Cpu size={14} /> Engine: {data.engine}
-          </span>
-        )}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {isDemo && (
+            <span className="badge badge-purple" style={{ padding: '6px 14px' }}>
+              <Info size={14} /> AI Simulation Engine
+            </span>
+          )}
+          {data && (
+            <span className="badge badge-cyan" style={{ padding: '6px 14px' }}>
+              <Cpu size={14} /> Engine: {data.engine}
+            </span>
+          )}
+        </div>
       </div>
 
       {error && (

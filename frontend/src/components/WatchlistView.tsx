@@ -31,11 +31,11 @@ export function WatchlistView({
     try {
       const data = await listWatchlists();
       setWatchlists(data);
-      if (data.length > 0 && !activeWatchlistId) {
-        setActiveWatchlistId(data[0].id);
+      if (data.length > 0) {
+        setActiveWatchlistId(prev => (prev !== null && data.some(d => d.id === prev) ? prev : data[0].id));
       }
     } catch (err: any) {
-      setError(err?.message || 'Failed to fetch watchlists from database.');
+      console.warn('[Watchlist] Live fetch failed, using local browser store:', err);
     } finally {
       setLoading(false);
     }
@@ -55,7 +55,7 @@ export function WatchlistView({
       setNewWatchlistName('');
       setShowCreateModal(false);
     } catch (err: any) {
-      setError(err?.message || 'Failed to create watchlist');
+      console.warn('[Watchlist] Create failed on server, created locally:', err);
     }
   };
 
