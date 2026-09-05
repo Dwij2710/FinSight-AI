@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { PieChart, Shield, Flame, Activity, ArrowUpRight, BarChart2, Scale, Bookmark, FolderOpen, Trash2, Check, Plus } from 'lucide-react';
+import { PieChart, Shield, Flame, Activity, ArrowUpRight, BarChart2, Scale, Bookmark, FolderOpen, Trash2, Check, Plus, Zap, RefreshCw } from 'lucide-react';
 import { PortfolioData, SavedPortfolio } from '../lib/types';
 import { getPortfolioOptimization, listSavedPortfolios, savePortfolio, deleteSavedPortfolio } from '../lib/api';
 import { MultiLineChart, CorrelationHeatmap, AllocationBars } from './Common/Charts';
@@ -13,6 +13,7 @@ export function PortfolioView() {
   const [data, setData] = useState<PortfolioData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isDemo, setIsDemo] = useState(false);
   const [activeStrategy, setActiveStrategy] = useState<'sharpe' | 'vol' | 'parity'>('sharpe');
 
   // Persistence state
@@ -42,6 +43,7 @@ export function PortfolioView() {
     try {
       const res = await getPortfolioOptimization({ tickers: parsed });
       setData(res.data);
+      setIsDemo(!!res.isDemo);
     } catch (err: any) {
       setError(err?.message || 'Portfolio optimization failed. Check ticker symbols.');
       setData(null);
@@ -211,6 +213,41 @@ export function PortfolioView() {
               : 'Provide at least 2 valid tickers separated by commas (e.g., AAPL, MSFT).'
           }
         />
+      )}
+
+      {/* Simulation Fallback Banner */}
+      {isDemo && !error && (
+        <div
+          className="glass-panel"
+          style={{
+            padding: '12px 18px',
+            borderRadius: 10,
+            border: '1px solid rgba(245, 158, 11, 0.4)',
+            backgroundColor: 'rgba(38, 28, 14, 0.65)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 12,
+            margin: '4px 0 14px 0'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: '0.88rem', color: '#FDE68A' }}>
+            <Zap size={18} color="#F59E0B" />
+            <span>
+              <strong>Zero-Downtime Simulation Mode:</strong> Cloud backend is currently sleeping or waking up. Displaying institutional frontier simulation.
+            </span>
+          </div>
+          <button
+            onClick={() => runOptimization()}
+            disabled={loading}
+            className="btn-secondary"
+            style={{ padding: '6px 14px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 6 }}
+          >
+            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+            <span>{loading ? 'Connecting...' : 'Connect Live'}</span>
+          </button>
+        </div>
       )}
 
       {/* Save Success Toast */}

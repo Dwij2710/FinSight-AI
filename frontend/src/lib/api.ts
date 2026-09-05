@@ -75,6 +75,8 @@ async function handleResponse(res: Response, fallbackMessage: string) {
   return json.data !== undefined ? json.data : json;
 }
 
+import { generateDemoPortfolio, generateDemoForecast } from './demoData';
+
 // ==================== FORECAST API ====================
 export async function getForecast(params: {
   ticker: string;
@@ -90,19 +92,32 @@ export async function getForecast(params: {
   forecast_period?: number;
   run_backtest?: boolean;
 }): Promise<{ data: ForecastData; isDemo?: boolean }> {
-  const res = await fetchWithDiagnostics(
-    `${API_BASE_URL}/api/forecast`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(params)
-    },
-    30000,
-    'Forecast'
-  );
+  try {
+    const res = await fetchWithDiagnostics(
+      `${API_BASE_URL}/api/forecast`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params)
+      },
+      30000,
+      'Forecast'
+    );
 
-  const data = await handleResponse(res, 'Forecast calculation failed');
-  return { data, isDemo: false };
+    const data = await handleResponse(res, 'Forecast calculation failed');
+    return { data, isDemo: false };
+  } catch (err: any) {
+    if (
+      err.message?.includes('Cannot connect') ||
+      err.message?.includes('offline') ||
+      err.message?.includes('timed out') ||
+      err.message?.includes('Failed to fetch')
+    ) {
+      console.warn('[FinSight AI] Live backend unreachable, activating zero-downtime simulation engine.');
+      return { data: generateDemoForecast(params.ticker), isDemo: true };
+    }
+    throw err;
+  }
 }
 
 // ==================== PORTFOLIO API ====================
@@ -111,19 +126,32 @@ export async function getPortfolioOptimization(params: {
   start_date?: string;
   end_date?: string;
 }): Promise<{ data: PortfolioData; isDemo?: boolean }> {
-  const res = await fetchWithDiagnostics(
-    `${API_BASE_URL}/api/portfolio/optimize`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(params)
-    },
-    35000,
-    'Portfolio optimization'
-  );
+  try {
+    const res = await fetchWithDiagnostics(
+      `${API_BASE_URL}/api/portfolio/optimize`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params)
+      },
+      35000,
+      'Portfolio optimization'
+    );
 
-  const data = await handleResponse(res, 'Portfolio optimization failed');
-  return { data, isDemo: false };
+    const data = await handleResponse(res, 'Portfolio optimization failed');
+    return { data, isDemo: false };
+  } catch (err: any) {
+    if (
+      err.message?.includes('Cannot connect') ||
+      err.message?.includes('offline') ||
+      err.message?.includes('timed out') ||
+      err.message?.includes('Failed to fetch')
+    ) {
+      console.warn('[FinSight AI] Live backend unreachable, activating zero-downtime simulation engine.');
+      return { data: generateDemoPortfolio(params.tickers), isDemo: true };
+    }
+    throw err;
+  }
 }
 
 // ==================== AI INSIGHTS API ====================
