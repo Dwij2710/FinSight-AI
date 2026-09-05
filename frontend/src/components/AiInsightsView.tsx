@@ -43,7 +43,7 @@ export function AiInsightsView({ ticker }: { ticker: string }) {
 
   const importanceItems = (signal?.feature_importance || []).map(f => ({
     label: f.feature,
-    value: f.importance
+    value: f.importance > 1 ? f.importance : f.importance * 100
   }));
 
   // Helper to format human-readable publication timestamps
@@ -271,9 +271,27 @@ export function AiInsightsView({ ticker }: { ticker: string }) {
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
-                    <div style={{ fontSize: '0.88rem', fontWeight: 500, color: '#F8FAFC', lineHeight: 1.4 }}>
-                      {article.Title}
-                    </div>
+                    <a
+                      href={article.Link || `https://finance.yahoo.com/quote/${ticker}/news`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        fontSize: '0.88rem',
+                        fontWeight: 500,
+                        color: '#F8FAFC',
+                        lineHeight: 1.4,
+                        textDecoration: 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        transition: 'color 0.2s'
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--accent-cyan)')}
+                      onMouseLeave={(e) => (e.currentTarget.style.color = '#F8FAFC')}
+                    >
+                      <span>{article.Title}</span>
+                      <ExternalLink size={13} style={{ flexShrink: 0, opacity: 0.7 }} />
+                    </a>
                     <span className={`badge ${
                       article.Sentiment === 'Positive'
                         ? 'badge-emerald'

@@ -103,64 +103,69 @@ export function generateDemoPortfolio(tickers: string[]): PortfolioData {
     series['Benchmark'].push(Number(bm.toFixed(2)));
   }
 
-  return {
-    valid_tickers: valid,
-    invalid_tickers: [],
-    correlation_matrix: {
-      tickers: valid,
-      values: matrixValues
-    },
-    max_sharpe: {
-      return: 0.238,
-      volatility: 0.142,
-      sharpe_ratio: 1.68,
-      weights: sharpeWeights
-    },
-    min_volatility: {
-      return: 0.145,
-      volatility: 0.098,
-      sharpe_ratio: 1.48,
-      weights: volWeights
-    },
-    risk_parity: {
-      return: 0.182,
-      volatility: 0.116,
-      sharpe_ratio: 1.57,
-      weights: parityWeights
-    },
-    benchmark_info: {
-      ticker: valid[0].includes('.NS') ? '^NSEI' : '^GSPC',
-      name: valid[0].includes('.NS') ? 'NIFTY 50' : 'S&P 500',
-      risk_free_rate_pct: 5.2
-    },
-    efficient_frontier: {
-      volatility: frontierVol,
-      return: frontierRet
-    },
-    random_portfolios: {
-      volatility: randVol,
-      return: randRet,
-      sharpe: randSharpe
-    },
-    cumulative_growth: {
-      dates,
-      series
-    },
-    risk_metrics: {
-      beta: 0.88,
-      max_drawdown_pct: -9.4,
-      drawdown_history: dates.slice(-60).map((d, idx) => ({
-        date: d,
-        drawdown: Number((-Math.abs(Math.sin(idx * 0.25) * 8.5)).toFixed(2))
-      }))
-    },
-    stress_tests: [
-      { scenario: '2008 Financial Crisis', market_drop_pct: -38.5, estimated_portfolio_impact_pct: -24.2 },
-      { scenario: '2020 COVID Shock', market_drop_pct: -33.9, estimated_portfolio_impact_pct: -19.6 },
-      { scenario: '2022 Inflation Surge', market_drop_pct: -25.4, estimated_portfolio_impact_pct: -14.8 }
-    ]
-  };
-}
+    const tickerStr = valid.join('');
+    let hash = 0;
+    for (let i = 0; i < tickerStr.length; i++) hash = (hash * 31 + tickerStr.charCodeAt(i)) & 0xffffffff;
+    const calculatedBeta = Number((0.72 + (Math.abs(hash) % 70) / 100).toFixed(2));
+
+    return {
+      valid_tickers: valid,
+      invalid_tickers: [],
+      correlation_matrix: {
+        tickers: valid,
+        values: matrixValues
+      },
+      max_sharpe: {
+        return: 0.238,
+        volatility: 0.142,
+        sharpe_ratio: 1.68,
+        weights: sharpeWeights
+      },
+      min_volatility: {
+        return: 0.145,
+        volatility: 0.098,
+        sharpe_ratio: 1.48,
+        weights: volWeights
+      },
+      risk_parity: {
+        return: 0.182,
+        volatility: 0.116,
+        sharpe_ratio: 1.57,
+        weights: parityWeights
+      },
+      benchmark_info: {
+        ticker: valid[0].includes('.NS') ? '^NSEI' : '^GSPC',
+        name: valid[0].includes('.NS') ? 'NIFTY 50' : 'S&P 500',
+        risk_free_rate_pct: 5.2
+      },
+      efficient_frontier: {
+        volatility: frontierVol,
+        return: frontierRet
+      },
+      random_portfolios: {
+        volatility: randVol,
+        return: randRet,
+        sharpe: randSharpe
+      },
+      cumulative_growth: {
+        dates,
+        series
+      },
+      risk_metrics: {
+        beta: calculatedBeta,
+        max_drawdown_pct: -9.4,
+        drawdown_history: dates.slice(-60).map((d, idx) => ({
+          date: d,
+          drawdown: Number((-Math.abs(Math.sin(idx * 0.25) * 8.5)).toFixed(2))
+        }))
+      },
+      stress_tests: [
+        { scenario: '2008 Financial Crisis', market_drop_pct: -38.5, estimated_portfolio_impact_pct: Number((-38.5 * calculatedBeta).toFixed(1)) },
+        { scenario: '2020 COVID Shock', market_drop_pct: -33.9, estimated_portfolio_impact_pct: Number((-33.9 * calculatedBeta).toFixed(1)) },
+        { scenario: '2022 Inflation Surge', market_drop_pct: -25.4, estimated_portfolio_impact_pct: Number((-25.4 * calculatedBeta).toFixed(1)) }
+      ]
+    };
+  }
 
 // ==================== FORECAST DEMO ====================
 export function generateDemoForecast(ticker: string): ForecastData {
@@ -276,10 +281,10 @@ export function generateDemoSignal(ticker: string): TradeSignalData {
     accuracy_pct: 81.2,
     is_strong: true,
     feature_importance: [
-      { feature: 'RSI Momentum (14D)', importance: 0.34 },
-      { feature: 'MACD Divergence Histogram', importance: 0.28 },
-      { feature: '20-Day SMA Mean-Reversion', importance: 0.22 },
-      { feature: 'Bollinger %B Volatility Band', importance: 0.16 }
+      { feature: 'RSI Momentum (14D)', importance: 34.0 },
+      { feature: 'MACD Divergence Histogram', importance: 28.0 },
+      { feature: '20-Day SMA Mean-Reversion', importance: 22.0 },
+      { feature: 'Bollinger %B Volatility Band', importance: 16.0 }
     ],
     technical_indicators: {
       rsi: 58.4,

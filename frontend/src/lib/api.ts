@@ -83,7 +83,7 @@ export async function checkBackendHealth(): Promise<BackendHealthStatus> {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
       cache: 'no-store',
-      signal: AbortSignal.timeout(3500)
+      signal: AbortSignal.timeout(15000)
     });
     if (res.ok) {
       const data = await res.json();

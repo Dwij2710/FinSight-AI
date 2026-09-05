@@ -51,6 +51,9 @@ async def analyze_sentiment(req: SentimentRequest):
         counts = sentiment_df['Sentiment'].value_counts().to_dict()
 
         articles = sentiment_df.to_dict(orient='records')
+        for art in articles:
+            if not art.get('Link') or art.get('Link') == '#':
+                art['Link'] = f"https://finance.yahoo.com/quote/{ticker}/news"
         now_ts = datetime.datetime.utcnow().isoformat() + "Z"
 
         return ApiResponse(
@@ -111,11 +114,17 @@ async def predict_trade_signal(req: SignalRequest):
             raise HTTPException(status_code=400, detail="Insufficient data points to generate AI trade signal.")
 
         feat_list = []
-        if feature_importance:
-            feat_list = [
-                {"feature": str(k), "importance": round(float(v) * 100, 2)}
-                for k, v in feature_importance.items()
-            ]
+        if feature_importance is not None:
+            if isinstance(feature_importance, pd.DataFrame):
+                feat_list = [
+                    {"feature": str(row['Feature']), "importance": round(float(row['Importance']), 2)}
+                    for _, row in feature_importance.iterrows()
+                ]
+            elif isinstance(feature_importance, dict):
+                feat_list = [
+                    {"feature": str(k), "importance": round(float(v), 2)}
+                    for k, v in feature_importance.items()
+                ]
 
         # Calculate current indicators for context
         df_ind = classifier.add_indicators()

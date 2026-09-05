@@ -114,15 +114,20 @@ async def optimize_portfolio(req: PortfolioRequest):
             for d, v in drawdown.items()
         ]
 
-        # Stress scenarios
-        scenarios = [-10, -20, -30, -50]
+        # Historical crisis stress scenarios calibrated with basket beta
+        scenarios = [
+            {"name": "2008 Financial Crisis", "drop": -38.5},
+            {"name": "2020 COVID Shock", "drop": -33.9},
+            {"name": "2022 Inflation Surge", "drop": -25.4},
+            {"name": "Severe Systemic Crash (-50%)", "drop": -50.0}
+        ]
         stress_results = [
             {
-                "scenario": f"Market Crash {drop}%",
-                "market_drop_pct": drop,
-                "estimated_portfolio_impact_pct": round(drop * beta, 2)
+                "scenario": s["name"],
+                "market_drop_pct": s["drop"],
+                "estimated_portfolio_impact_pct": round(s["drop"] * beta, 2)
             }
-            for drop in scenarios
+            for s in scenarios
         ]
 
         response_data = {

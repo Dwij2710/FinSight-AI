@@ -274,10 +274,17 @@ class TrendClassifier:
         # Now Train on FULL Data for the Real Prediction
         model.fit(X_full, y_full)
         
-        # Feature Importances
+        # Feature Importances strictly normalized to sum to 100.0%
+        raw_importances = model.feature_importances_
+        sum_imp = float(np.sum(raw_importances))
+        if sum_imp > 0:
+            pct_importances = (raw_importances / sum_imp) * 100.0
+        else:
+            pct_importances = np.full_like(raw_importances, 100.0 / len(raw_importances))
+
         feature_importance = pd.DataFrame({
             'Feature': features,
-            'Importance': model.feature_importances_
+            'Importance': pct_importances
         }).sort_values('Importance', ascending=False)
         
         # Prediction Data: The last row (represents "Today")

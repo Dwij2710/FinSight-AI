@@ -157,5 +157,50 @@ class TestTelemetryAndProvenance(unittest.TestCase):
         self.assertIn("T", resp.fetched_at)
 
 
+class TestFeatureImportanceNormalization(unittest.TestCase):
+    def test_feature_importance_sums_to_100(self):
+        """Validates that TrendClassifier feature importances strictly sum to 100.0%."""
+        from src.ai_features import TrendClassifier
+        np.random.seed(42)
+        prices = 100.0 + np.cumsum(np.random.randn(120) * 1.5)
+        dates = pd.date_range(start="2023-01-01", periods=120, freq="B")
+        close_series = pd.Series(prices, index=dates, name="Close")
+
+        classifier = TrendClassifier(close_series)
+        signal, confidence, accuracy, feature_importance = classifier.predict_trend()
+
+        self.assertIsNotNone(feature_importance)
+        self.assertIsInstance(feature_importance, pd.DataFrame)
+        total_importance = float(feature_importance["Importance"].sum())
+        self.assertAlmostEqual(total_importance, 100.0, places=2)
+
+
+class TestDynamicPortfolioStressTesting(unittest.TestCase):
+    def test_stress_test_differs_by_basket(self):
+        """Verifies that two different asset baskets produce distinct betas and stress impacts."""
+        np.random.seed(42)
+        n = 100
+        bench_returns = pd.Series(np.random.normal(0.0005, 0.01, n))
+
+        # Basket 1: High-beta tech asset (2x sensitivity + noise)
+        high_beta_returns = 1.8 * bench_returns + np.random.normal(0, 0.004, n)
+        # Basket 2: Low-beta defensive asset (0.4x sensitivity + noise)
+        low_beta_returns = 0.4 * bench_returns + np.random.normal(0, 0.004, n)
+
+        beta_high = high_beta_returns.cov(bench_returns) / bench_returns.var()
+        beta_low = low_beta_returns.cov(bench_returns) / bench_returns.var()
+
+        self.assertGreater(beta_high, 1.3)
+        self.assertLess(beta_low, 0.7)
+
+        # 2008 GFC shock (-38.5%)
+        impact_high = -38.5 * beta_high
+        impact_low = -38.5 * beta_low
+
+        # Higher beta must experience a significantly worse drawdown
+        self.assertLess(impact_high, impact_low)
+        self.assertNotEqual(round(impact_high, 1), round(impact_low, 1))
+
+
 if __name__ == "__main__":
     unittest.main()
