@@ -29,6 +29,20 @@ export function ErrorBanner({
   const isMultiLine = errorMessage.includes('\n') || errorMessage.length > 180;
   const firstLine = errorMessage.split('\n')[0];
 
+  const isConnectionError =
+    errorMessage.toLowerCase().includes('failed to fetch') ||
+    errorMessage.toLowerCase().includes('cannot connect') ||
+    errorMessage.toLowerCase().includes('unable to connect') ||
+    errorMessage.toLowerCase().includes('network error') ||
+    errorMessage.toLowerCase().includes('timed out') ||
+    errorMessage.toLowerCase().includes('timeout') ||
+    errorMessage.toLowerCase().includes('connection refused');
+
+  const displayTitle = isConnectionError ? 'API Backend Connection Notice' : title;
+  const displayTip = isConnectionError
+    ? 'The FastAPI backend is offline or spinning up. If using Render free tier, allow ~45s for cold start and click Retry. If running locally, start: uvicorn backend.app.main:app --port 8000'
+    : suggestedAction;
+
   const handleRetry = async () => {
     if (!onRetry || retrying) return;
     setRetrying(true);
@@ -93,7 +107,7 @@ export function ErrorBanner({
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
               <h4 style={{ fontSize: '0.95rem', fontWeight: 600, color: '#F8FAFC', margin: 0 }}>
-                {title}
+                {displayTitle}
               </h4>
               <span
                 style={{
@@ -115,10 +129,10 @@ export function ErrorBanner({
               {isMultiLine && !expanded ? `${firstLine.slice(0, 160)}...` : errorMessage}
             </p>
 
-            {suggestedAction && (
+            {displayTip && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px', fontSize: '0.8rem', color: 'var(--text-muted, #64748B)' }}>
                 <Info size={13} color={colors.accent} />
-                <span>Tip: {suggestedAction}</span>
+                <span>Tip: {displayTip}</span>
               </div>
             )}
 

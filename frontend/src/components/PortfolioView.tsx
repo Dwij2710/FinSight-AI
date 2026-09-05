@@ -202,7 +202,14 @@ export function PortfolioView() {
           error={error}
           onRetry={() => runOptimization()}
           onDismiss={() => setError(null)}
-          suggestedAction="Provide at least 2 valid tickers separated by commas (e.g., AAPL, MSFT)."
+          suggestedAction={
+            error.toLowerCase().includes('connect') ||
+            error.toLowerCase().includes('fetch') ||
+            error.toLowerCase().includes('timeout') ||
+            error.toLowerCase().includes('offline')
+              ? 'The backend may be spinning up on Render free tier. Please wait ~30-45s and click Retry.'
+              : 'Provide at least 2 valid tickers separated by commas (e.g., AAPL, MSFT).'
+          }
         />
       )}
 

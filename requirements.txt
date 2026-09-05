@@ -1,3 +1,4 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
 fastapi>=0.110.0
 uvicorn[standard]>=0.28.0
 pydantic>=2.6.0
@@ -21,4 +22,5 @@ plotly
 pyarrow
 gymnasium>=0.29.0
 stable-baselines3>=2.2.0
-torch --extra-index-url https://download.pytorch.org/whl/cpu
+torch
+
