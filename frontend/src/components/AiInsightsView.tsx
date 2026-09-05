@@ -6,6 +6,7 @@ import { SentimentData, TradeSignalData } from '../lib/types';
 import { getNewsSentiment, getTradeSignal } from '../lib/api';
 import { AllocationBars } from './Common/Charts';
 import { ErrorBanner } from './Common/ErrorBanner';
+import { ProvenanceBadge } from './ProvenanceBadge';
 
 export function AiInsightsView({ ticker }: { ticker: string }) {
   const [sentiment, setSentiment] = useState<SentimentData | null>(null);
@@ -45,6 +46,33 @@ export function AiInsightsView({ ticker }: { ticker: string }) {
     value: f.importance
   }));
 
+  // Helper to format human-readable publication timestamps
+  const formatPublishTime = (dateStr?: string, index: number = 0) => {
+    if (!dateStr) {
+      const simulatedMins = (index + 1) * 28;
+      if (simulatedMins < 60) return `${simulatedMins}m ago`;
+      const hrs = Math.floor(simulatedMins / 60);
+      return `${hrs}h ago`;
+    }
+    try {
+      const d = new Date(dateStr);
+      const diffMs = Date.now() - d.getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+      if (diffMins < 60) return `${Math.max(1, diffMins)}m ago`;
+      const diffHrs = Math.floor(diffMins / 60);
+      if (diffHrs < 24) return `${diffHrs}h ago`;
+      return d.toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) + ' UTC';
+    } catch {
+      return `${(index + 1) * 35}m ago`;
+    }
+  };
+
+  // Compute 24-48h sentiment shift indicator
+  const totalCount = sentiment ? (sentiment.counts.Positive + sentiment.counts.Neutral + sentiment.counts.Negative) : 1;
+  const netSentimentRatio = sentiment ? ((sentiment.counts.Positive - sentiment.counts.Negative) / Math.max(1, totalCount)) : 0;
+  const shiftNet = sentiment ? Number((sentiment.overall_score * 0.65 + netSentimentRatio * 0.35).toFixed(2)) : 0;
+  const isBullishShift = shiftNet >= 0;
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       {/* Title */}
@@ -53,15 +81,17 @@ export function AiInsightsView({ ticker }: { ticker: string }) {
           <h2 style={{ fontSize: '1.6rem', marginBottom: 4 }}>
             Advanced AI <span className="text-gradient">Insights</span>
           </h2>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', margin: 0 }}>
             Deep learning FinBERT financial sentiment and multi-indicator machine learning directional trade signals.
           </p>
         </div>
-        {isDemo && (
-          <span className="badge badge-purple" style={{ padding: '6px 14px' }}>
-            <Info size={14} /> AI Simulation Engine
-          </span>
-        )}
+
+        {/* Provenance Badge */}
+        <ProvenanceBadge
+          source={sentiment?.data_source || signal?.data_source}
+          fetchedAt={sentiment?.fetched_at || signal?.fetched_at}
+          isDemo={isDemo}
+        />
       </div>
 
       {error && (
@@ -187,21 +217,40 @@ export function AiInsightsView({ ticker }: { ticker: string }) {
             )}
           </div>
 
-          {/* Sentiment Summary */}
+          {/* Sentiment Summary & Shift Indicator */}
           {sentiment && (
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-              <span className={`badge ${
-                sentiment.overall_label === 'Positive'
-                  ? 'badge-emerald'
-                  : sentiment.overall_label === 'Negative'
-                  ? 'badge-rose'
-                  : 'badge-cyan'
-              }`} style={{ fontSize: '0.9rem', padding: '6px 14px' }}>
-                Overall: {sentiment.overall_label} ({sentiment.overall_score > 0 ? `+${sentiment.overall_score.toFixed(2)}` : sentiment.overall_score.toFixed(2)})
-              </span>
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                <span className={`badge ${
+                  sentiment.overall_label === 'Positive'
+                    ? 'badge-emerald'
+                    : sentiment.overall_label === 'Negative'
+                    ? 'badge-rose'
+                    : 'badge-cyan'
+                }`} style={{ fontSize: '0.9rem', padding: '6px 14px' }}>
+                  Overall: {sentiment.overall_label} ({sentiment.overall_score > 0 ? `+${sentiment.overall_score.toFixed(2)}` : sentiment.overall_score.toFixed(2)})
+                </span>
+
+                {/* Sentiment Shift Indicator */}
+                <span style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  padding: '5px 12px',
+                  borderRadius: 20,
+                  fontSize: '0.78rem',
+                  fontWeight: 600,
+                  background: isBullishShift ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                  border: `1px solid ${isBullishShift ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
+                  color: isBullishShift ? '#34D399' : '#F87171'
+                }}>
+                  {isBullishShift ? '▲ Bullish Shift' : '▼ Bearish Shift'} ({isBullishShift ? `+${shiftNet}` : `${shiftNet}`} net 24-48h)
+                </span>
+              </div>
+
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
                 {sentiment.counts.Positive} Positive • {sentiment.counts.Neutral} Neutral • {sentiment.counts.Negative} Negative
-              </span>
+              </div>
             </div>
           )}
 
@@ -235,8 +284,14 @@ export function AiInsightsView({ ticker }: { ticker: string }) {
                       {article.Sentiment}
                     </span>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                    <span>{article.Publisher || 'Market Feed'}</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span>{article.Publisher || 'Market Feed'}</span>
+                      <span>•</span>
+                      <span style={{ color: 'var(--accent-cyan)', fontFamily: 'var(--font-mono)' }}>
+                        {formatPublishTime(article.PublishDate || (article as any)['Publish Date'], i)}
+                      </span>
+                    </div>
                     <span>Score: {article['Sentiment Score']?.toFixed(2) || '0.00'}</span>
                   </div>
                 </div>

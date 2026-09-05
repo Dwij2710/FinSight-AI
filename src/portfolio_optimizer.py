@@ -103,6 +103,8 @@ class PortfolioOptimizer:
         """
         ret = self._portfolio_return(weights)
         vol = self._portfolio_volatility(weights)
+        if vol <= 1e-8:
+            return 0.0
         return -(ret - self.risk_free_rate) / vol
     
     def optimize_sharpe_ratio(self):
@@ -135,7 +137,8 @@ class PortfolioOptimizer:
         optimal_weights = result.x
         optimal_return = self._portfolio_return(optimal_weights)
         optimal_volatility = self._portfolio_volatility(optimal_weights)
-        optimal_sharpe = (optimal_return - self.risk_free_rate) / optimal_volatility
+        safe_vol = optimal_volatility if optimal_volatility > 1e-8 else 1e-8
+        optimal_sharpe = (optimal_return - self.risk_free_rate) / safe_vol
         
         return {
             'weights': dict(zip(self.assets, optimal_weights)),
@@ -175,11 +178,12 @@ class PortfolioOptimizer:
         optimal_return = self._portfolio_return(optimal_weights)
         optimal_volatility = self._portfolio_volatility(optimal_weights)
         
+        safe_vol = optimal_volatility if optimal_volatility > 1e-8 else 1e-8
         return {
             'weights': dict(zip(self.assets, optimal_weights)),
             'return': optimal_return,
             'volatility': optimal_volatility,
-            'sharpe_ratio': (optimal_return - self.risk_free_rate) / optimal_volatility
+            'sharpe_ratio': (optimal_return - self.risk_free_rate) / safe_vol
         }
     
     def optimize_risk_parity(self):

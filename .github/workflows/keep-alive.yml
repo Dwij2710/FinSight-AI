@@ -1,0 +1,29 @@
+name: Render Backend Keep-Alive Ping
+
+on:
+  schedule:
+    # Trigger every 12 minutes to prevent Render free-tier idle spin-down (spins down after ~15m)
+    - cron: '*/12 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping-backend:
+    name: Ping FastAPI Health Endpoint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Ping Backend /health
+        run: |
+          BACKEND_URL="https://finsight-ai-3ffu.onrender.com/health"
+          echo "Sending keep-alive ping to ${BACKEND_URL}..."
+          
+          # Allow up to 45s timeout for cold start wakeups
+          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 45 "${BACKEND_URL}" || echo "FAILED")
+          
+          echo "Response status code: ${STATUS_CODE}"
+          if [ "${STATUS_CODE}" -eq 200 ]; then
+            echo "✅ FinSight AI Backend is alive and warm."
+          else
+            echo "⚠️ Backend returned status ${STATUS_CODE}. Container may be waking up."
+          fi

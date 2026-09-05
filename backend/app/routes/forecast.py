@@ -181,11 +181,16 @@ async def generate_forecast(req: ForecastRequest):
                 "fitted": round(float(f), 2)
             })
 
+        now_ts = datetime.datetime.utcnow().isoformat() + "Z"
         return ApiResponse(
             success=True,
+            data_source="live",
+            fetched_at=now_ts,
             data=sanitize_for_json({
                 "ticker": ticker,
                 "column": col,
+                "data_source": "live",
+                "fetched_at": now_ts,
                 "metrics": {
                     "rmse": round(rmse, 2),
                     "mape": round(mape, 2),

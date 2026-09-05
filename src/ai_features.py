@@ -638,16 +638,21 @@ class FinBERTAnalyzer:
             
             data = []
             for item in news:
+                pub_time = ''
                 if isinstance(item, dict):
                     if 'content' in item:
                         content = item.get('content', {})
                         title = content.get('title', '')
                         publisher = content.get('provider', {}).get('displayName', '') if isinstance(content.get('provider'), dict) else ''
                         link = item.get('link', '')
+                        pub_time = content.get('pubDate', '')
                     else:
                         title = item.get('title', '')
                         publisher = item.get('publisher', '')
                         link = item.get('link', '')
+                        raw_ts = item.get('providerPublishTime', None)
+                        if raw_ts and isinstance(raw_ts, (int, float)):
+                            pub_time = datetime.datetime.utcfromtimestamp(raw_ts).strftime('%b %d, %Y %H:%M UTC')
                 else:
                     continue
                 
@@ -657,10 +662,11 @@ class FinBERTAnalyzer:
                 score, label = self._analyze_text(title)
                 data.append({
                     'Title': title,
-                    'Publisher': publisher,
+                    'Publisher': publisher or 'Market Feed',
                     'Sentiment Score': round(score, 3),
                     'Sentiment': label,
-                    'Link': link
+                    'Link': link or '#',
+                    'PublishDate': pub_time or 'Recent'
                 })
             
             return pd.DataFrame(data), self._model_used()

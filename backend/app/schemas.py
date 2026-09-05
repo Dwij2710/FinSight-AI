@@ -110,3 +110,5 @@ class ApiResponse(BaseModel):
     success: bool
     message: Optional[str] = None
     data: Optional[Any] = None
+    data_source: Optional[str] = Field("live", description="'live' | 'cache' | 'simulated'")
+    fetched_at: Optional[str] = Field(default_factory=lambda: datetime.utcnow().isoformat() + "Z")

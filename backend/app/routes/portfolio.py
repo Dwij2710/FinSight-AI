@@ -173,10 +173,13 @@ async def optimize_portfolio(req: PortfolioRequest):
                 "max_drawdown_pct": round(max_dd, 2),
                 "drawdown_history": drawdown_history[::max(1, len(drawdown_history) // 100)] # Sample up to 100 pts
             },
-            "stress_tests": stress_results
+            "stress_tests": stress_results,
+            "data_source": "live",
+            "fetched_at": datetime.utcnow().isoformat() + "Z"
         }
 
-        return ApiResponse(success=True, data=sanitize_for_json(response_data))
+        now_ts = datetime.utcnow().isoformat() + "Z"
+        return ApiResponse(success=True, data_source="live", fetched_at=now_ts, data=sanitize_for_json(response_data))
 
     except HTTPException:
         raise

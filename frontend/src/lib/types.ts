@@ -1,5 +1,37 @@
 // TypeScript Definitions for FinSight AI
 
+export type DataSourceType = 'live' | 'cache' | 'simulated';
+
+export interface BaseDataProvenance {
+  data_source?: DataSourceType;
+  fetched_at?: string;
+}
+
+export interface LiveTickerQuote {
+  ticker: string;
+  price: number;
+  change: number;
+  change_pct: number;
+  volume: number;
+  market_state: 'OPEN' | 'CLOSED';
+  last_updated: string;
+  day_low?: number;
+  day_high?: number;
+  year_low?: number;
+  year_high?: number;
+  prev_close?: number;
+  open_price?: number;
+}
+
+export interface BackendHealthStatus {
+  online: boolean;
+  status?: string;
+  uptime_seconds?: number;
+  last_data_fetch_ts?: string | null;
+  yfinance_reachable?: boolean;
+  latencyMs?: number;
+}
+
 export interface ForecastPoint {
   date: string;
   actual?: number;
@@ -23,7 +55,7 @@ export interface BacktestResult {
   error?: string;
 }
 
-export interface ForecastData {
+export interface ForecastData extends BaseDataProvenance {
   ticker: string;
   column: string;
   metrics: {
@@ -50,7 +82,7 @@ export interface ForecastData {
   summary?: string | null;
 }
 
-export interface PortfolioData {
+export interface PortfolioData extends BaseDataProvenance {
   valid_tickers: string[];
   invalid_tickers: string[];
   correlation_matrix: {
@@ -111,9 +143,10 @@ export interface NewsArticle {
   Sentiment: 'Positive' | 'Negative' | 'Neutral';
   'Sentiment Score': number;
   Link: string;
+  PublishDate?: string;
 }
 
-export interface SentimentData {
+export interface SentimentData extends BaseDataProvenance {
   ticker: string;
   model_used: string;
   overall_score: number;
@@ -126,12 +159,13 @@ export interface SentimentData {
   articles: NewsArticle[];
 }
 
-export interface TradeSignalData {
+export interface TradeSignalData extends BaseDataProvenance {
   ticker: string;
   signal: string;
   confidence_pct: number;
   accuracy_pct: number;
   is_strong: boolean;
+  training_period?: string;
   feature_importance: { feature: string; importance: number }[];
   technical_indicators: {
     rsi: number | null;
@@ -148,7 +182,7 @@ export interface RlHistoryPoint {
   action: string;
 }
 
-export interface RlSimulationData {
+export interface RlSimulationData extends BaseDataProvenance {
   ticker: string;
   algo_type: string;
   action_type: string;
@@ -162,10 +196,11 @@ export interface RlSimulationData {
   max_drawdown_pct: number;
   win_rate_pct: number;
   total_trades: number;
+  episodes_trained?: number;
   history: RlHistoryPoint[];
 }
 
-export interface TftData {
+export interface TftData extends BaseDataProvenance {
   ticker: string;
   current_price: number;
   sp500_price: number;

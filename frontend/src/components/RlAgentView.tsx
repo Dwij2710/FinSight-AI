@@ -6,6 +6,7 @@ import { RlSimulationData } from '../lib/types';
 import { simulateRlAgent } from '../lib/api';
 import { MultiLineChart } from './Common/Charts';
 import { ErrorBanner } from './Common/ErrorBanner';
+import { ProvenanceBadge } from './ProvenanceBadge';
 
 export function RlAgentView({ ticker }: { ticker: string }) {
   const [data, setData] = useState<RlSimulationData | null>(null);
@@ -48,30 +49,48 @@ export function RlAgentView({ ticker }: { ticker: string }) {
   const dates = data?.history.map(h => h.date) || [];
   const agentSeries = data?.history.map(h => h.agent_net_worth) || [];
   const benchSeries = data?.history.map(h => h.benchmark_net_worth) || [];
+  const latestPrice = data?.history && data.history.length > 0 ? data.history[data.history.length - 1].price : undefined;
+  const alpha = data ? Number((data.profit_pct - data.benchmark_profit_pct).toFixed(1)) : 0;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <h2 style={{ fontSize: '1.6rem', marginBottom: 4 }}>
-            Reinforcement Learning <span className="text-gradient">Trading Agent</span>
-          </h2>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
+            <h2 style={{ fontSize: '1.6rem', margin: 0 }}>
+              Reinforcement Learning <span className="text-gradient">Trading Agent</span>
+            </h2>
+            {latestPrice && (
+              <span style={{
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                borderRadius: 8,
+                padding: '3px 10px',
+                fontSize: '0.82rem',
+                fontFamily: 'var(--font-mono)',
+                color: 'var(--text-primary)',
+                fontWeight: 600
+              }}>
+                {ticker} ${latestPrice.toFixed(2)}
+              </span>
+            )}
+          </div>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', margin: 0 }}>
             Deep RL policy networks (PPO / A2C / DQN) trained in Gymnasium environment to optimize Sharpe and maximize portfolio net worth.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          {isDemo && (
-            <span className="badge badge-purple" style={{ padding: '6px 14px' }}>
-              <Info size={14} /> AI Simulation Engine
-            </span>
-          )}
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           {data && (
             <span className="badge badge-cyan" style={{ padding: '6px 14px' }}>
               <Cpu size={14} /> Engine: {data.engine}
             </span>
           )}
+          <ProvenanceBadge
+            source={data?.data_source}
+            fetchedAt={data?.fetched_at}
+            isDemo={isDemo}
+          />
         </div>
       </div>
 
@@ -127,7 +146,9 @@ export function RlAgentView({ ticker }: { ticker: string }) {
             <div className="metric-value">
               {data.benchmark_profit_pct > 0 ? `+${data.benchmark_profit_pct}%` : `${data.benchmark_profit_pct}%`}
             </div>
-            <div className="metric-subtext">Passive holding performance</div>
+            <div className="metric-subtext">
+              Alpha: <strong style={{ color: alpha >= 0 ? 'var(--accent-emerald)' : 'var(--accent-rose)' }}>{alpha >= 0 ? `+${alpha}%` : `${alpha}%`}</strong> vs Passive
+            </div>
           </div>
         </div>
       )}

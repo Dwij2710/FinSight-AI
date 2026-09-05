@@ -51,14 +51,19 @@ async def analyze_sentiment(req: SentimentRequest):
         counts = sentiment_df['Sentiment'].value_counts().to_dict()
 
         articles = sentiment_df.to_dict(orient='records')
+        now_ts = datetime.datetime.utcnow().isoformat() + "Z"
 
         return ApiResponse(
             success=True,
+            data_source="live",
+            fetched_at=now_ts,
             data=sanitize_for_json({
                 "ticker": ticker,
                 "model_used": model_used,
                 "overall_score": round(avg_score, 3),
                 "overall_label": overall_label,
+                "data_source": "live",
+                "fetched_at": now_ts,
                 "counts": {
                     "Positive": int(counts.get("Positive", 0)),
                     "Neutral": int(counts.get("Neutral", 0)),
@@ -119,15 +124,21 @@ async def predict_trade_signal(req: SignalRequest):
         current_rsi = float(last_row.get('RSI', 50.0)) if 'RSI' in last_row else None
         current_sma20 = float(last_row.get('SMA_20', 0.0)) if 'SMA_20' in last_row else None
         current_sma50 = float(last_row.get('SMA_50', 0.0)) if 'SMA_50' in last_row else None
+        now_ts = datetime.datetime.utcnow().isoformat() + "Z"
 
         return ApiResponse(
             success=True,
+            data_source="live",
+            fetched_at=now_ts,
             data=sanitize_for_json({
                 "ticker": ticker,
                 "signal": signal,
                 "confidence_pct": round(float(confidence) * 100, 1),
                 "accuracy_pct": round(float(accuracy) * 100, 1),
                 "is_strong": bool(confidence > 0.6),
+                "training_period": f"{start.strftime('%b %Y')} – {end.strftime('%b %Y')} (730 Bars)",
+                "data_source": "live",
+                "fetched_at": now_ts,
                 "feature_importance": feat_list,
                 "technical_indicators": {
                     "rsi": round(current_rsi, 2) if current_rsi else None,

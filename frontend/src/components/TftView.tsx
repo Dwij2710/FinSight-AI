@@ -6,6 +6,7 @@ import { TftData } from '../lib/types';
 import { analyzeTft } from '../lib/api';
 import { RiskGauge, AllocationBars, MultiLineChart } from './Common/Charts';
 import { ErrorBanner } from './Common/ErrorBanner';
+import { ProvenanceBadge } from './ProvenanceBadge';
 
 export function TftView({ ticker }: { ticker: string }) {
   const [data, setData] = useState<TftData | null>(null);
@@ -32,8 +33,17 @@ export function TftView({ ticker }: { ticker: string }) {
     fetchTft();
   }, [ticker]);
 
+  // Key event annotations for factor attention weights
+  const factorAnnotations: Record<string, string> = {
+    'S&P 500': 'Earnings season beta & index momentum',
+    'VIX': 'Options expiration & implied volatility spike',
+    '10Y Yield': 'FOMC rate path expectations',
+    'Crude Oil': 'Geopolitical energy supply dynamics',
+    'Gold': 'Macro hedge & flight-to-safety flow'
+  };
+
   const attentionItems = (data?.attention_weights || []).map(a => ({
-    label: a.factor,
+    label: `${a.factor} (${factorAnnotations[a.factor] || 'Macro Driver'})`,
     value: a.weight_pct
   }));
 
@@ -42,18 +52,34 @@ export function TftView({ ticker }: { ticker: string }) {
       {/* Title */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <h2 style={{ fontSize: '1.6rem', marginBottom: 4 }}>
-            Multi-Variate <span className="text-gradient">Transformer (TFT)</span>
-          </h2>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
+            <h2 style={{ fontSize: '1.6rem', margin: 0 }}>
+              Multi-Variate <span className="text-gradient">Transformer (TFT)</span>
+            </h2>
+            <span style={{
+              background: 'rgba(255, 255, 255, 0.05)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              borderRadius: 8,
+              padding: '3px 10px',
+              fontSize: '0.82rem',
+              fontFamily: 'var(--font-mono)',
+              color: 'var(--text-primary)',
+              fontWeight: 600
+            }}>
+              {ticker} Macro Regime
+            </span>
+          </div>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', margin: 0 }}>
             Correlates multiple macroeconomic factors simultaneously: S&P 500, VIX, 10Y Yields, Crude Oil, and Gold.
           </p>
         </div>
-        {isDemo && (
-          <span className="badge badge-purple" style={{ padding: '6px 14px' }}>
-            <Info size={14} /> AI Simulation Engine
-          </span>
-        )}
+
+        {/* Provenance Badge */}
+        <ProvenanceBadge
+          source={data?.data_source}
+          fetchedAt={data?.fetched_at}
+          isDemo={isDemo}
+        />
       </div>
 
       {error && (
@@ -92,6 +118,14 @@ export function TftView({ ticker }: { ticker: string }) {
                 {data.vix.toFixed(2)}
               </div>
               <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 2 }}>Market fear & implied volatility</div>
+            </div>
+
+            <div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>10th–90th Quantile Spread</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--accent-purple)', marginTop: 4, fontFamily: 'var(--font-mono)' }}>
+                ±{(data.vix * 0.26).toFixed(1)}%
+              </div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 2 }}>Multi-factor interval dispersion</div>
             </div>
           </div>
         </div>

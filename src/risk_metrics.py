@@ -83,10 +83,11 @@ class RiskMetrics:
         
         betas = {}
         market_variance = self.benchmark_returns.var()
+        safe_var = market_variance if market_variance > 1e-8 else 1e-8
         
         for column in aligned_returns.columns:
             covariance = aligned_returns[column].cov(self.benchmark_returns)
-            betas[column] = covariance / market_variance
+            betas[column] = covariance / safe_var
             
         return pd.Series(betas)
     
@@ -127,8 +128,9 @@ class RiskMetrics:
         
         # Annualized volatility
         volatility = self.calculate_volatility(annualized=True)
+        safe_vol = np.where(volatility > 1e-8, volatility, 1e-8)
         
-        return excess_returns / volatility
+        return excess_returns / safe_vol
     
     def calculate_sortino_ratio(self):
         """
@@ -144,11 +146,12 @@ class RiskMetrics:
         
         # Downside deviation
         downside_std = downside_returns.std() * np.sqrt(TRADING_DAYS)
+        safe_downside = np.where(downside_std.fillna(0) > 1e-8, downside_std.fillna(0), 1e-8)
         
         # Annualized excess returns
         excess_returns = self.returns.mean() * TRADING_DAYS - self.risk_free_rate
         
-        return excess_returns / downside_std
+        return excess_returns / safe_downside
     
     def calculate_treynor_ratio(self):
         """

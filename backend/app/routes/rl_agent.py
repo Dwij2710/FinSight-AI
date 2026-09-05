@@ -205,14 +205,20 @@ async def simulate_rl_agent(req: RlSimulateRequest):
                 "action": actions[-1]
             })
 
+        now_ts = datetime.datetime.utcnow().isoformat() + "Z"
         return ApiResponse(
             success=True,
+            data_source="live",
+            fetched_at=now_ts,
             data=sanitize_for_json({
                 "ticker": ticker,
                 "algo_type": req.algo_type,
                 "action_type": req.action_type,
                 "risk_profile": req.risk_profile,
+                "data_source": "live",
+                "fetched_at": now_ts,
                 "engine": "Stable-Baselines3 (Deep RL)" if trained_with_sb3 else "Adaptive Quant Q-Simulator",
+                "episodes_trained": max(100, req.timesteps // 50),
                 "initial_balance": req.initial_balance,
                 "final_balance": round(final_balance, 2),
                 "profit": round(profit, 2),

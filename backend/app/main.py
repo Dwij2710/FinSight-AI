@@ -20,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .db.database import init_db
-from .routes import forecast, portfolio, ai_insights, rl_agent, tft, portfolios, watchlists
+from .routes import forecast, portfolio, ai_insights, rl_agent, tft, portfolios, watchlists, ticker
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -52,6 +52,7 @@ app.include_router(rl_agent.router)
 app.include_router(tft.router)
 app.include_router(portfolios.router)
 app.include_router(watchlists.router)
+app.include_router(ticker.router)
 
 @app.get("/")
 async def root():
@@ -68,17 +69,28 @@ async def root():
             "/api/ai/signal",
             "/api/rl/simulate",
             "/api/tft/analyze",
+            "/api/ticker/live",
             "/health"
         ],
         "documentation": "/docs"
     }
 
+from src.data_fetcher import get_last_data_fetch_ts, is_yfinance_reachable
+
+_START_TIME = datetime.utcnow()
+
 @app.get("/health")
 async def health_check():
+    uptime = (datetime.utcnow() - _START_TIME).total_seconds()
+    last_fetch = get_last_data_fetch_ts()
+    yf_ok = is_yfinance_reachable()
     return {
         "status": "healthy",
-        "timestamp": datetime.utcnow().isoformat() + "Z",
-        "service": "FinSight AI API"
+        "service": "FinSight AI API",
+        "uptime_seconds": round(uptime, 1),
+        "last_data_fetch_ts": last_fetch,
+        "yfinance_reachable": yf_ok,
+        "timestamp": datetime.utcnow().isoformat() + "Z"
     }
 
 if __name__ == "__main__":

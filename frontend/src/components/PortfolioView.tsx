@@ -6,6 +6,7 @@ import { PortfolioData, SavedPortfolio } from '../lib/types';
 import { getPortfolioOptimization, listSavedPortfolios, savePortfolio, deleteSavedPortfolio } from '../lib/api';
 import { MultiLineChart, CorrelationHeatmap, AllocationBars } from './Common/Charts';
 import { ErrorBanner } from './Common/ErrorBanner';
+import { ProvenanceBadge } from './ProvenanceBadge';
 
 export function PortfolioView() {
   const defaultTickers = 'RELIANCE.NS, TCS.NS, HDFCBANK.NS, INFY.NS, ICICIBANK.NS';
@@ -122,6 +123,15 @@ export function PortfolioView() {
     value: val
   }));
 
+  // Calculate Rebalance Urgency Score (0-100)
+  // Divergence between equal-weight baseline (1/N) and current optimal allocation
+  const tickerKeys = Object.keys(activeWeights);
+  const baselineWeight = tickerKeys.length > 0 ? 1 / tickerKeys.length : 0;
+  const totalDivergence = tickerKeys.reduce((acc, sym) => {
+    return acc + Math.abs((activeWeights[sym] || 0) - baselineWeight);
+  }, 0) / 2;
+  const rebalanceScore = Math.min(100, Math.round(totalDivergence * 100 * 1.8));
+
   // Build cumulative chart series
   const cumDates = data?.cumulative_growth?.dates || [];
   const benchmarkName = data?.benchmark_info?.name || 'Benchmark';
@@ -143,27 +153,36 @@ export function PortfolioView() {
           <h2 style={{ fontSize: '1.6rem', marginBottom: 4 }}>
             Modern Portfolio <span className="text-gradient">Optimization</span>
           </h2>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', margin: 0 }}>
             Markowitz Efficient Frontier, risk-adjusted Sharpe maximization, correlation matrix, and crash stress-testing.
           </p>
         </div>
 
-        {/* Presets */}
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            onClick={() => setPreset('RELIANCE.NS, TCS.NS, HDFCBANK.NS, INFY.NS, ICICIBANK.NS')}
-            className="btn-secondary"
-            style={{ fontSize: '0.8rem', padding: '6px 14px' }}
-          >
-            🇮🇳 NIFTY Top 5
-          </button>
-          <button
-            onClick={() => setPreset('AAPL, MSFT, NVDA, GOOGL, AMZN')}
-            className="btn-secondary"
-            style={{ fontSize: '0.8rem', padding: '6px 14px' }}
-          >
-            🇺🇸 US Big Tech
-          </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          {/* Provenance Badge */}
+          <ProvenanceBadge
+            source={data?.data_source}
+            fetchedAt={data?.fetched_at}
+            isDemo={isDemo}
+          />
+
+          {/* Presets */}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={() => setPreset('RELIANCE.NS, TCS.NS, HDFCBANK.NS, INFY.NS, ICICIBANK.NS')}
+              className="btn-secondary"
+              style={{ fontSize: '0.8rem', padding: '6px 14px' }}
+            >
+              🇮🇳 NIFTY Top 5
+            </button>
+            <button
+              onClick={() => setPreset('AAPL, MSFT, NVDA, GOOGL, AMZN')}
+              className="btn-secondary"
+              style={{ fontSize: '0.8rem', padding: '6px 14px' }}
+            >
+              🇺🇸 US Big Tech
+            </button>
+          </div>
         </div>
       </div>
 
@@ -356,8 +375,8 @@ export function PortfolioView() {
 
       {data && (
         <>
-          {/* Performance Comparison Cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20 }}>
+          {/* Performance Comparison & Strategy Selector Cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
             {/* Max Sharpe */}
             <div
               className={`glass-panel glass-panel-interactive ${activeStrategy === 'sharpe' ? 'active' : ''}`}
@@ -368,36 +387,250 @@ export function PortfolioView() {
                 background: activeStrategy === 'sharpe' ? 'rgba(0, 242, 254, 0.05)' : 'var(--bg-card)'
               }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Flame size={20} color="var(--accent-cyan)" />
-                  <h3 style={{ fontSize: '1.1rem' }}>Max Sharpe Portfolio</h3>
+                  <Flame size={18} color="var(--accent-cyan)" />
+                  <h3 style={{ fontSize: '1rem', margin: 0 }}>Max Sharpe</h3>
                 </div>
-                <span className="badge badge-cyan">Optimal Return</span>
+                <span className="badge badge-cyan" style={{ fontSize: '0.68rem' }}>Optimal Risk/Return</span>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
                 <div>
-                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Expected Return</div>
-                  <div style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--accent-emerald)' }}>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Return</div>
+                  <div style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--accent-emerald)' }}>
                     +{data.max_sharpe.return.toFixed(1)}%
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Volatility</div>
-                  <div style={{ fontSize: '1.3rem', fontWeight: 700, color: '#F8FAFC' }}>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Volatility</div>
+                  <div style={{ fontSize: '1.15rem', fontWeight: 700, color: '#F8FAFC' }}>
                     {data.max_sharpe.volatility.toFixed(1)}%
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Sharpe Ratio</div>
-                  <div style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--accent-cyan)' }}>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Sharpe</div>
+                  <div style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--accent-cyan)' }}>
                     {data.max_sharpe.sharpe_ratio.toFixed(2)}
                   </div>
                 </div>
               </div>
+              <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: 8, fontFamily: 'var(--font-mono)' }}>
+                Sharpe = (E[R] - Rf) / σ = ({data.max_sharpe.return.toFixed(1)}% - {data.benchmark_info?.risk_free_rate_pct || 4.2}%) / {data.max_sharpe.volatility.toFixed(1)}%
+              </div>
             </div>
 
+            {/* Min Volatility */}
+            <div
+              className={`glass-panel glass-panel-interactive ${activeStrategy === 'vol' ? 'active' : ''}`}
+              onClick={() => setActiveStrategy('vol')}
+              style={{
+                cursor: 'pointer',
+                borderColor: activeStrategy === 'vol' ? 'var(--accent-emerald)' : 'var(--border-subtle)',
+                background: activeStrategy === 'vol' ? 'rgba(16, 185, 129, 0.05)' : 'var(--bg-card)'
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Shield size={18} color="var(--accent-emerald)" />
+                  <h3 style={{ fontSize: '1rem', margin: 0 }}>Min Volatility</h3>
+                </div>
+                <span className="badge badge-emerald" style={{ fontSize: '0.68rem' }}>Capital Shield</span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                <div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Return</div>
+                  <div style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--accent-emerald)' }}>
+                    +{data.min_volatility.return.toFixed(1)}%
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Volatility</div>
+                  <div style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--accent-emerald)' }}>
+                    {data.min_volatility.volatility.toFixed(1)}%
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Sharpe</div>
+                  <div style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--accent-cyan)' }}>
+                    {data.min_volatility.sharpe_ratio.toFixed(2)}
+                  </div>
+                </div>
+              </div>
+              <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: 8, fontFamily: 'var(--font-mono)' }}>
+                Lowest variance portfolio on the Markowitz hyperbolic curve
+              </div>
+            </div>
 
+            {/* Risk Parity / Equal Risk */}
+            <div
+              className={`glass-panel glass-panel-interactive ${activeStrategy === 'parity' ? 'active' : ''}`}
+              onClick={() => setActiveStrategy('parity')}
+              style={{
+                cursor: 'pointer',
+                borderColor: activeStrategy === 'parity' ? 'var(--accent-purple)' : 'var(--border-subtle)',
+                background: activeStrategy === 'parity' ? 'rgba(168, 85, 247, 0.05)' : 'var(--bg-card)'
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Scale size={18} color="var(--accent-purple)" />
+                  <h3 style={{ fontSize: '1rem', margin: 0 }}>Risk Parity</h3>
+                </div>
+                <span className="badge badge-purple" style={{ fontSize: '0.68rem' }}>Equal Risk Budget</span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                <div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Return</div>
+                  <div style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--accent-emerald)' }}>
+                    +{data.risk_parity?.return.toFixed(1) || data.max_sharpe.return.toFixed(1)}%
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Volatility</div>
+                  <div style={{ fontSize: '1.15rem', fontWeight: 700, color: '#F8FAFC' }}>
+                    {data.risk_parity?.volatility.toFixed(1) || data.max_sharpe.volatility.toFixed(1)}%
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Sharpe</div>
+                  <div style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--accent-cyan)' }}>
+                    {data.risk_parity?.sharpe_ratio.toFixed(2) || data.max_sharpe.sharpe_ratio.toFixed(2)}
+                  </div>
+                </div>
+              </div>
+              <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: 8, fontFamily: 'var(--font-mono)' }}>
+                Each asset contributes identically to total portfolio variance
+              </div>
+            </div>
+          </div>
+
+          {/* Rebalance Urgency & Drift Telemetry Banner */}
+          <div style={{
+            background: rebalanceScore > 35 ? 'rgba(245, 158, 11, 0.08)' : 'rgba(16, 185, 129, 0.08)',
+            border: `1px solid ${rebalanceScore > 35 ? 'rgba(245, 158, 11, 0.3)' : 'rgba(16, 185, 129, 0.3)'}`,
+            borderRadius: 12,
+            padding: '14px 20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 14
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{
+                width: 40,
+                height: 40,
+                borderRadius: 10,
+                background: rebalanceScore > 35 ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Activity size={20} color={rebalanceScore > 35 ? '#F59E0B' : '#10B981'} />
+              </div>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)' }}>
+                    Rebalance Urgency Score:
+                  </span>
+                  <span style={{
+                    fontSize: '1rem',
+                    fontWeight: 800,
+                    color: rebalanceScore > 35 ? '#F59E0B' : '#10B981',
+                    fontFamily: 'var(--font-mono)'
+                  }}>
+                    {rebalanceScore} / 100
+                  </span>
+                  <span className={rebalanceScore > 35 ? 'badge badge-amber' : 'badge badge-emerald'} style={{ fontSize: '0.7rem' }}>
+                    {rebalanceScore > 35 ? 'Rebalance Recommended' : 'Portfolio Balanced'}
+                  </span>
+                </div>
+                <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: 0, marginTop: 2 }}>
+                  {rebalanceScore > 35
+                    ? `Asset weights diverge by ${Math.round(totalDivergence * 100)}% from equal baseline. Aligning with ${activeStrategy.toUpperCase()} captures estimated +${(data.max_sharpe.return - (data.min_volatility.return)).toFixed(1)}% alpha.`
+                    : `Asset drift is within acceptable tolerance (<${Math.round(totalDivergence * 100)}%). No immediate rebalance required.`}
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowSaveModal(true)}
+              className="btn-secondary"
+              style={{ fontSize: '0.78rem', padding: '6px 14px' }}
+            >
+              Lock Allocation
+            </button>
+          </div>
+
+          {/* Holdings Breakdown Table */}
+          <div className="glass-panel" style={{ padding: '16px 20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <div>
+                <h3 style={{ fontSize: '1.05rem', margin: 0 }}>Holdings Breakdown & Allocation Deltas</h3>
+                <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: 0, marginTop: 2 }}>
+                  Optimal weights for active strategy ({activeStrategy.toUpperCase()}) vs equal-weighted baseline.
+                </p>
+              </div>
+              <span className="badge badge-cyan" style={{ fontSize: '0.72rem' }}>
+                {Object.keys(activeWeights).length} Equities Analyzed
+              </span>
+            </div>
+
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.08)', color: 'var(--text-muted)', textAlign: 'left' }}>
+                    <th style={{ padding: '8px 12px' }}>Asset</th>
+                    <th style={{ padding: '8px 12px' }}>Baseline (1/N)</th>
+                    <th style={{ padding: '8px 12px' }}>Target Weight</th>
+                    <th style={{ padding: '8px 12px' }}>Rebalance Delta</th>
+                    <th style={{ padding: '8px 12px' }}>Recommended Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(activeWeights).map(([sym, targetWeight]) => {
+                    const baseline = baselineWeight * 100;
+                    const target = targetWeight * 100;
+                    const delta = target - baseline;
+                    const action = delta > 3
+                      ? 'Accumulate'
+                      : delta < -3
+                      ? 'Trim'
+                      : 'Hold';
+                    const actionColor = delta > 3 ? '#10B981' : delta < -3 ? '#EF4444' : '#94A3B8';
+
+                    return (
+                      <tr key={sym} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.04)', fontFamily: 'var(--font-mono)' }}>
+                        <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                          {sym}
+                        </td>
+                        <td style={{ padding: '10px 12px', color: 'var(--text-secondary)' }}>
+                          {baseline.toFixed(1)}%
+                        </td>
+                        <td style={{ padding: '10px 12px', fontWeight: 700, color: 'var(--accent-cyan)' }}>
+                          {target.toFixed(1)}%
+                        </td>
+                        <td style={{ padding: '10px 12px', color: delta >= 0 ? '#10B981' : '#EF4444' }}>
+                          {delta >= 0 ? '+' : ''}{delta.toFixed(1)}%
+                        </td>
+                        <td style={{ padding: '10px 12px' }}>
+                          <span style={{
+                            padding: '3px 8px',
+                            borderRadius: 6,
+                            fontSize: '0.72rem',
+                            fontWeight: 600,
+                            background: delta > 3 ? 'rgba(16, 185, 129, 0.12)' : delta < -3 ? 'rgba(239, 68, 68, 0.12)' : 'rgba(255, 255, 255, 0.06)',
+                            color: actionColor
+                          }}>
+                            {action}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           {/* Allocation & Growth Charts */}

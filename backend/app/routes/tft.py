@@ -75,8 +75,11 @@ async def analyze_tft(req: TftRequest):
         chart_dates = [d.strftime('%Y-%m-%d') for d in recent_30.index]
         chart_series = {col: [round(float(v), 2) for v in norm_recent[col]] for col in norm_recent.columns}
 
+        now_ts = datetime.datetime.utcnow().isoformat() + "Z"
         return ApiResponse(
             success=True,
+            data_source="live",
+            fetched_at=now_ts,
             data=sanitize_for_json({
                 "ticker": ticker,
                 "current_price": round(current_price, 2),
@@ -84,6 +87,8 @@ async def analyze_tft(req: TftRequest):
                 "vix": round(vix_val, 2),
                 "regime": regime,
                 "regime_desc": regime_desc,
+                "data_source": "live",
+                "fetched_at": now_ts,
                 "attention_weights": [
                     {"factor": k, "weight_pct": round(float(v * 100), 2)}
                     for k, v in attention_weights.items()
@@ -91,7 +96,8 @@ async def analyze_tft(req: TftRequest):
                 "anomaly_analysis": {
                     "is_anomaly": anomaly_data.get('is_anomaly', False),
                     "risk_score": round(float(anomaly_data.get('risk_score', 0.0)), 1),
-                    "message": anomaly_data.get('message', '')
+                    "message": anomaly_data.get('message', ''),
+                    "scanned_at": now_ts
                 },
                 "lookalike": lookalike_data,
                 "probabilistic_forecast": prob_forecast,

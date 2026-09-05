@@ -7,7 +7,10 @@ import {
   TftData,
   SavedPortfolio,
   Watchlist,
-  WatchlistItem
+  WatchlistItem,
+  LiveTickerQuote,
+  BackendHealthStatus,
+  DataSourceType
 } from './types';
 
 import {
@@ -25,6 +28,15 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
 
 const WATCHLISTS_STORAGE_KEY = 'finsight_watchlists_cache';
 const PORTFOLIOS_STORAGE_KEY = 'finsight_portfolios_cache';
+
+const DEMO_TICKER_QUOTES: LiveTickerQuote[] = [
+  { ticker: 'AAPL', price: 224.50, change: 1.85, change_pct: 0.83, volume: 48200000, market_state: 'OPEN', last_updated: new Date().toISOString(), day_low: 222.1, day_high: 225.4, year_low: 164.08, year_high: 237.23, prev_close: 222.65, open_price: 223.1 },
+  { ticker: 'NVDA', price: 118.20, change: 3.40, change_pct: 2.96, volume: 89400000, market_state: 'OPEN', last_updated: new Date().toISOString(), day_low: 115.8, day_high: 119.5, year_low: 40.5, year_high: 140.76, prev_close: 114.80, open_price: 116.0 },
+  { ticker: 'MSFT', price: 412.80, change: -1.20, change_pct: -0.29, volume: 18500000, market_state: 'OPEN', last_updated: new Date().toISOString(), day_low: 410.2, day_high: 415.6, year_low: 309.45, year_high: 468.35, prev_close: 414.00, open_price: 413.5 },
+  { ticker: 'TSLA', price: 215.60, change: 5.10, change_pct: 2.42, volume: 62100000, market_state: 'OPEN', last_updated: new Date().toISOString(), day_low: 209.5, day_high: 218.0, year_low: 138.8, year_high: 271.0, prev_close: 210.50, open_price: 211.2 },
+  { ticker: 'RELIANCE.NS', price: 3012.40, change: 14.80, change_pct: 0.49, volume: 5400000, market_state: 'CLOSED', last_updated: new Date().toISOString(), day_low: 2985.0, day_high: 3028.0, year_low: 2220.0, year_high: 3217.9, prev_close: 2997.60, open_price: 3000.0 },
+  { ticker: 'TCS.NS', price: 4480.00, change: -22.50, change_pct: -0.50, volume: 2100000, market_state: 'CLOSED', last_updated: new Date().toISOString(), day_low: 4450.0, day_high: 4510.0, year_low: 3313.0, year_high: 4592.0, prev_close: 4502.50, open_price: 4500.0 }
+];
 
 function getLocalWatchlists(): Watchlist[] {
   if (typeof window === 'undefined') return generateDemoWatchlists();
@@ -64,7 +76,7 @@ function saveLocalPortfolios(list: SavedPortfolio[]) {
   try { localStorage.setItem(PORTFOLIOS_STORAGE_KEY, JSON.stringify(list)); } catch {}
 }
 
-export async function checkBackendHealth(): Promise<{ online: boolean; latencyMs?: number }> {
+export async function checkBackendHealth(): Promise<BackendHealthStatus> {
   const start = Date.now();
   try {
     const res = await fetch(`${API_BASE_URL}/health`, {
@@ -74,12 +86,53 @@ export async function checkBackendHealth(): Promise<{ online: boolean; latencyMs
       signal: AbortSignal.timeout(3500)
     });
     if (res.ok) {
-      return { online: true, latencyMs: Date.now() - start };
+      const data = await res.json();
+      return {
+        online: true,
+        status: data.status,
+        uptime_seconds: data.uptime_seconds,
+        last_data_fetch_ts: data.last_data_fetch_ts,
+        yfinance_reachable: data.yfinance_reachable,
+        latencyMs: Date.now() - start
+      };
     }
     return { online: false };
   } catch {
     return { online: false };
   }
+}
+
+export async function getLiveTickerQuotes(tickers?: string[]): Promise<{
+  quotes: LiveTickerQuote[];
+  dataSource: DataSourceType;
+  fetchedAt: string;
+}> {
+  const query = tickers && tickers.length > 0 ? `?tickers=${encodeURIComponent(tickers.join(','))}` : '';
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/ticker/live${query}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(6000)
+    });
+    if (res.ok) {
+      const json = await res.json();
+      if (json.success && Array.isArray(json.data)) {
+        return {
+          quotes: json.data,
+          dataSource: json.data_source || 'live',
+          fetchedAt: json.fetched_at || new Date().toISOString()
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('[FinSight AI] Live ticker quotes endpoint unreachable, using fallback quotes:', err);
+  }
+  return {
+    quotes: DEMO_TICKER_QUOTES,
+    dataSource: 'simulated',
+    fetchedAt: new Date().toISOString()
+  };
 }
 
 async function fetchWithDiagnostics(

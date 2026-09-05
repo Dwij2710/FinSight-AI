@@ -30,6 +30,46 @@ from src.polygon_client import PolygonClient
 # In-memory TTL cache: {cache_key: (timestamp, data)}
 _IN_MEMORY_CACHE: Dict[str, Tuple[float, Any]] = {}
 _PRICE_CACHE_TTL = 900  # 15 minutes
+_LAST_DATA_FETCH_TS: Optional[str] = None
+
+
+def get_last_data_fetch_ts() -> Optional[str]:
+    """Returns the ISO timestamp of the most recent successful market data fetch."""
+    return _LAST_DATA_FETCH_TS
+
+
+def _mark_data_fetched() -> None:
+    global _LAST_DATA_FETCH_TS
+    _LAST_DATA_FETCH_TS = datetime.utcnow().isoformat() + "Z"
+
+
+def is_yfinance_reachable(timeout_sec: float = 3.0) -> bool:
+    """Quick probe to verify external market data provider reachability."""
+    try:
+        # Fast query of 1 day on S&P 500
+        probe = yf.download("^GSPC", period="1d", progress=False)
+        return not probe.empty
+    except Exception:
+        return False
+
+
+def _download_with_retry(ticker_or_tickers, start: Optional[str] = None, end: Optional[str] = None, retries: int = 3, backoff: float = 1.0, **kwargs) -> pd.DataFrame:
+    """Execute yfinance download with exponential backoff retries."""
+    for attempt in range(1, retries + 1):
+        try:
+            if start and end:
+                df = yf.download(ticker_or_tickers, start=start, end=end, progress=False, auto_adjust=False, **kwargs)
+            else:
+                df = yf.download(ticker_or_tickers, progress=False, auto_adjust=False, **kwargs)
+            if not df.empty:
+                _mark_data_fetched()
+                return df
+        except Exception as e:
+            if attempt == retries:
+                print(f"[DataFetcher] yfinance query failed after {retries} retries: {e}")
+                break
+        time.sleep(backoff * attempt)
+    return pd.DataFrame()
 
 
 def _get_from_cache(key: str) -> Optional[Any]:
@@ -96,7 +136,7 @@ class DataFetcher:
         # 2. If Polygon returned empty (historical limit, international, or rate limit), query Yahoo Finance
         if df.empty:
             try:
-                yf_data = yf.download(clean_ticker, start=s_date, end=e_date, progress=False, auto_adjust=False)
+                yf_data = _download_with_retry(clean_ticker, start=s_date, end=e_date)
                 if not yf_data.empty:
                     if isinstance(yf_data.columns, pd.MultiIndex):
                         yf_data.columns = [c[0] for c in yf_data.columns]
@@ -145,7 +185,7 @@ class DataFetcher:
         if not price_series_dict:
             # Fallback batch download
             try:
-                batch_data = yf.download(self.tickers, start=self.start_date, end=self.end_date, progress=False)
+                batch_data = _download_with_retry(self.tickers, start=self.start_date, end=self.end_date)
                 if not batch_data.empty:
                     if isinstance(batch_data.columns, pd.MultiIndex):
                         level0 = batch_data.columns.get_level_values(0)

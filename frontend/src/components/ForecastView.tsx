@@ -5,7 +5,7 @@ import { Play, CheckCircle, AlertTriangle, BarChart3, TrendingUp, Info } from 'l
 import { ForecastData } from '../lib/types';
 import { getForecast } from '../lib/api';
 import { MultiLineChart } from './Common/Charts';
-
+import { ProvenanceBadge } from './ProvenanceBadge';
 import { ErrorBanner } from './Common/ErrorBanner';
 
 export function ForecastView({ ticker }: { ticker: string }) {
@@ -48,6 +48,17 @@ export function ForecastView({ ticker }: { ticker: string }) {
     runModel();
   }, [ticker]);
 
+  // Derive price metrics
+  const lastActual = data?.history && data.history.length > 0
+    ? data.history.filter(h => h.actual !== undefined).slice(-1)[0]?.actual
+    : undefined;
+  const lastPredicted = data?.predictions && data.predictions.length > 0
+    ? data.predictions[data.predictions.length - 1].predicted_mean
+    : undefined;
+  const projectedChangePct = (lastActual && lastPredicted)
+    ? ((lastPredicted - lastActual) / lastActual) * 100
+    : 0;
+
   // Prepare chart series for Forecast
   const historyDates = data?.history.map(h => h.date) || [];
   const predDates = data?.predictions.map(p => p.date) || [];
@@ -83,19 +94,86 @@ export function ForecastView({ ticker }: { ticker: string }) {
       {/* Top Banner / Status */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <h2 style={{ fontSize: '1.6rem', marginBottom: 4 }}>
-            Stock Price <span className="text-gradient">Forecasting</span>
-          </h2>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
+            <h2 style={{ fontSize: '1.6rem', margin: 0 }}>
+              Stock Price <span className="text-gradient">Forecasting</span>
+            </h2>
+            {lastActual && (
+              <span style={{
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                borderRadius: 8,
+                padding: '3px 10px',
+                fontSize: '0.82rem',
+                fontFamily: 'var(--font-mono)',
+                color: 'var(--text-primary)',
+                fontWeight: 600
+              }}>
+                {ticker} ${lastActual.toFixed(2)}
+              </span>
+            )}
+          </div>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', margin: 0 }}>
             Autoregressive integrated moving average (SARIMAX) with seasonal decomposition & backtest validation.
           </p>
         </div>
-        {isDemo && (
-          <span className="badge badge-purple" style={{ padding: '6px 12px' }}>
-            <Info size={14} /> AI Simulation Engine
-          </span>
-        )}
+
+        {/* Provenance Badge */}
+        <ProvenanceBadge
+          source={data?.data_source}
+          fetchedAt={data?.fetched_at}
+          isDemo={isDemo}
+        />
       </div>
+
+      {/* Model Agreement & Consensus Banner */}
+      {data && (
+        <div style={{
+          background: Math.abs(projectedChangePct) > 1.2
+            ? (projectedChangePct > 0 ? 'rgba(16, 185, 129, 0.07)' : 'rgba(239, 68, 68, 0.07)')
+            : 'rgba(59, 130, 246, 0.07)',
+          border: `1px solid ${
+            Math.abs(projectedChangePct) > 1.2
+              ? (projectedChangePct > 0 ? 'rgba(16, 185, 129, 0.25)' : 'rgba(239, 68, 68, 0.25)')
+              : 'rgba(59, 130, 246, 0.25)'
+          }`,
+          borderRadius: 12,
+          padding: '12px 18px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 12
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              backgroundColor: projectedChangePct >= 0 ? '#10B981' : '#EF4444',
+              boxShadow: projectedChangePct >= 0 ? '0 0 8px #10B981' : '0 0 8px #EF4444'
+            }} />
+            <span style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--text-primary)' }}>
+              Model Agreement & Projection:
+            </span>
+            <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+              {Math.abs(projectedChangePct) > 1.0
+                ? (projectedChangePct > 0
+                    ? `High Confidence Bullish — Projected +${projectedChangePct.toFixed(2)}% over next ${forecastDays} trading sessions (Fit Accuracy: ${data.metrics.accuracy.toFixed(1)}%)`
+                    : `Bearish Divergence — Projected ${projectedChangePct.toFixed(2)}% downward consolidation over next ${forecastDays} sessions (Fit Accuracy: ${data.metrics.accuracy.toFixed(1)}%)`)
+                : `Neutral Consolidation — Projected within tight range (${projectedChangePct >= 0 ? '+' : ''}${projectedChangePct.toFixed(2)}%)`}
+            </span>
+          </div>
+
+          <span style={{
+            fontSize: '0.75rem',
+            fontFamily: 'var(--font-mono)',
+            color: 'var(--text-muted)'
+          }}>
+            Confidence: 95% Interval [${data.predictions[0]?.lower_bound.toFixed(2) || '—'} - ${data.predictions[data.predictions.length - 1]?.upper_bound.toFixed(2) || '—'}]
+          </span>
+        </div>
+      )}
 
       {/* Error Banner */}
       {error && (

@@ -8,10 +8,11 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, date, timedelta
 from typing import Optional, Dict, Any
-from dotenv import load_dotenv
-
-# Load local environment variables from .env file if present
-load_dotenv()
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 class PolygonClient:
     def __init__(self, api_key: Optional[str] = None):
