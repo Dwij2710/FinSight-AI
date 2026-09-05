@@ -14,6 +14,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r /app/requirements.txt
 
 # Copy backend and source directories
+COPY main.py /app/main.py
 COPY backend/ /app/backend/
 COPY src/ /app/src/
 COPY config/ /app/config/

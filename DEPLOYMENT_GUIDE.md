@@ -50,12 +50,22 @@ Render provides free hosting for containerized and Python web services.
      ```
    - **Start Command**:
      ```bash
-     uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
+     uvicorn main:app --host 0.0.0.0 --port $PORT
      ```
+     *(Alternatively: `uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT` or `./start.sh`)*
    - **Instance Type**: **Free**
-5. Click **Create Web Service**.
-6. Once deployed, Render will give you a public URL (e.g., `https://finsight-ai-backend.onrender.com`).
+5. Under **Environment Variables** (Advanced), add:
+    - `PYTHON_VERSION`: `3.10.11`
+    - `PYTHONUNBUFFERED`: `1`
+    - `PORT`: `10000`
+6. Click **Create Web Service** (or **Save Changes** if already created).
+7. Once deployed, Render will give you a public URL (e.g., `https://finsight-ai-backend.onrender.com`).
    - Test it by opening: `https://finsight-ai-backend.onrender.com/health` in your browser. It should respond with `{"status": "healthy"}`.
+
+> [!IMPORTANT]
+> **Fixing "Port scan timeout reached" on Render**:
+> Render requires Web Services to bind to `0.0.0.0` and listen on the `$PORT` environment variable (default `10000`). If your service settings in Render have an empty Start Command or hardcode `127.0.0.1` / `8000`, Render will time out. Ensure your Start Command in Render Settings is set to:
+> `uvicorn main:app --host 0.0.0.0 --port $PORT`
 
 > [!TIP]
 > **Render Free Tier Note**: Free services spin down after 15 minutes of inactivity. The first request after a sleep period may take ~30–45 seconds to wake up. FinSight AI's frontend has a smart status indicator and automatic fallback simulation so your site never breaks while waking up!
