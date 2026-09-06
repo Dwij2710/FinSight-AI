@@ -272,7 +272,7 @@ export function AiInsightsView({ ticker }: { ticker: string }) {
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
                     <a
-                      href={article.Link || `https://finance.yahoo.com/quote/${ticker}/news`}
+                      href={article.Link && article.Link !== '#' ? article.Link : `https://finance.yahoo.com/quote/${ticker}/news`}
                       target="_blank"
                       rel="noopener noreferrer"
                       style={{

@@ -21,7 +21,7 @@ from datetime import datetime
 from src.portfolio_optimizer import PortfolioOptimizer
 from src.risk_metrics import RiskMetrics
 from backend.app.schemas import ApiResponse
-from backend.app.routes.ticker import _TICKER_CACHE, _TICKER_CACHE_TTL
+from backend.app.services.market_data import market_data_service
 
 
 def generate_sample_returns():
@@ -128,19 +128,37 @@ class TestRebalanceUrgencyScore(unittest.TestCase):
 
 class TestTelemetryAndProvenance(unittest.TestCase):
     def test_cache_ttl_and_telemetry(self):
-        """Tests that ticker cache honors TTL expiration."""
+        """Tests that MarketDataService honors TTL expiration."""
+        from backend.app.schemas import CanonicalQuote
         test_ticker = "MOCK_TEST_TICKER"
         now = time.time()
+        mock_quote = CanonicalQuote(
+            ticker=test_ticker,
+            price=150.0,
+            change=1.2,
+            change_pct=0.8,
+            open_price=149.0,
+            day_high=151.0,
+            day_low=148.5,
+            prev_close=148.8,
+            volume=1000000,
+            currency="USD",
+            exchange="US",
+            market_state="OPEN",
+            timestamp="2026-09-06T00:00:00Z",
+            data_source="mock",
+            is_stale=False
+        )
         
         # Insert mock cache entry that is fresh
-        _TICKER_CACHE[test_ticker] = (now, {"ticker": test_ticker, "price": 150.0})
-        cached_time, data = _TICKER_CACHE[test_ticker]
-        self.assertLess(now - cached_time, _TICKER_CACHE_TTL)
+        market_data_service._quote_cache[test_ticker] = (now, mock_quote)
+        cached_time, data = market_data_service._quote_cache[test_ticker]
+        self.assertLess(now - cached_time, market_data_service.cache_ttl)
         
         # Set timestamp to past (expired)
-        _TICKER_CACHE[test_ticker] = (now - (_TICKER_CACHE_TTL + 5), {"ticker": test_ticker, "price": 150.0})
-        old_time, _ = _TICKER_CACHE[test_ticker]
-        self.assertGreater(time.time() - old_time, _TICKER_CACHE_TTL)
+        market_data_service._quote_cache[test_ticker] = (now - (market_data_service.cache_ttl + 5), mock_quote)
+        old_time, _ = market_data_service._quote_cache[test_ticker]
+        self.assertGreater(time.time() - old_time, market_data_service.cache_ttl)
 
     def test_api_response_provenance_stamp(self):
         """Ensures ApiResponse schema requires data_source and fetched_at metadata."""

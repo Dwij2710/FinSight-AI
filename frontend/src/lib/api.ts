@@ -29,6 +29,16 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
 const WATCHLISTS_STORAGE_KEY = 'finsight_watchlists_cache';
 const PORTFOLIOS_STORAGE_KEY = 'finsight_portfolios_cache';
 
+export function isExplicitDemoMode(): boolean {
+  if (typeof window === 'undefined') return false;
+  return localStorage.getItem('finsight_explicit_demo_mode') === 'true';
+}
+
+export function setExplicitDemoMode(enabled: boolean): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem('finsight_explicit_demo_mode', enabled ? 'true' : 'false');
+}
+
 const DEMO_TICKER_QUOTES: LiveTickerQuote[] = [
   { ticker: 'AAPL', price: 224.50, change: 1.85, change_pct: 0.83, volume: 48200000, market_state: 'OPEN', last_updated: new Date().toISOString(), day_low: 222.1, day_high: 225.4, year_low: 164.08, year_high: 237.23, prev_close: 222.65, open_price: 223.1 },
   { ticker: 'NVDA', price: 118.20, change: 3.40, change_pct: 2.96, volume: 89400000, market_state: 'OPEN', last_updated: new Date().toISOString(), day_low: 115.8, day_high: 119.5, year_low: 40.5, year_high: 140.76, prev_close: 114.80, open_price: 116.0 },
@@ -83,7 +93,7 @@ export async function checkBackendHealth(): Promise<BackendHealthStatus> {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
       cache: 'no-store',
-      signal: AbortSignal.timeout(15000)
+      signal: AbortSignal.timeout(10000)
     });
     if (res.ok) {
       const data = await res.json();
@@ -113,7 +123,7 @@ export async function getLiveTickerQuotes(tickers?: string[]): Promise<{
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
       cache: 'no-store',
-      signal: AbortSignal.timeout(6000)
+      signal: AbortSignal.timeout(8000)
     });
     if (res.ok) {
       const json = await res.json();
@@ -125,14 +135,42 @@ export async function getLiveTickerQuotes(tickers?: string[]): Promise<{
         };
       }
     }
+    throw new Error(`Ticker endpoint returned HTTP ${res.status}`);
   } catch (err) {
-    console.warn('[FinSight AI] Live ticker quotes endpoint unreachable, using fallback quotes:', err);
+    if (isExplicitDemoMode()) {
+      return {
+        quotes: DEMO_TICKER_QUOTES,
+        dataSource: 'simulated',
+        fetchedAt: new Date().toISOString()
+      };
+    }
+    // In production/live path without explicit demo mode: return empty list so the app shows real state
+    return {
+      quotes: [],
+      dataSource: 'stale_cache',
+      fetchedAt: new Date().toISOString()
+    };
   }
-  return {
-    quotes: DEMO_TICKER_QUOTES,
-    dataSource: 'simulated',
-    fetchedAt: new Date().toISOString()
-  };
+}
+
+export async function getSingleQuote(ticker: string): Promise<LiveTickerQuote | null> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/ticker/quote/${encodeURIComponent(ticker)}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(8000)
+    });
+    if (res.ok) {
+      const json = await res.json();
+      if (json.success && json.data) {
+        return json.data as LiveTickerQuote;
+      }
+    }
+  } catch (err) {
+    console.warn(`[FinSight AI] Failed to fetch authoritative live quote for ${ticker}:`, err);
+  }
+  return null;
 }
 
 async function fetchWithDiagnostics(
@@ -149,12 +187,12 @@ async function fetchWithDiagnostics(
   } catch (err: any) {
     if (err.name === 'TimeoutError' || err.message?.includes('timeout') || err.name === 'AbortError') {
       throw new Error(
-        `Request timed out while connecting to ${API_BASE_URL}. If hosted on Render free tier, the backend spins down when inactive and takes ~45s to wake up. Please click Retry.`
+        `Request timed out while connecting to FinSight backend (${operationName}). If hosted on Render free tier, the backend spins down when inactive (~45s wake-up time). Please click Retry.`
       );
     }
     if (err.message === 'Failed to fetch' || err.name === 'TypeError') {
       throw new Error(
-        `Cannot connect to FinSight AI API backend at ${API_BASE_URL}. The server is currently offline or spinning up. If running locally, start it with 'uvicorn backend.app.main:app --port 8000'. If deployed on Render, allow ~45s for cold start and click Retry.`
+        `Cannot connect to FinSight AI API backend at ${API_BASE_URL}. The server is currently offline or spinning up. If running locally, verify with 'uvicorn backend.app.main:app --port 8000'.`
       );
     }
     throw new Error(`${operationName} request failed: ${err?.message || 'Network error'}`);
@@ -211,8 +249,12 @@ export async function getForecast(params: {
     const data = await handleResponse(res, 'Forecast calculation failed');
     return { data, isDemo: false };
   } catch (err: any) {
-    console.warn('[FinSight AI] Live backend unreachable, activating zero-downtime forecast simulation engine:', err?.message || err);
-    return { data: generateDemoForecast(params.ticker), isDemo: true };
+    if (isExplicitDemoMode()) {
+      console.info('[FinSight AI] Demo Sandbox active. Serving reference demo forecast.');
+      return { data: generateDemoForecast(params.ticker), isDemo: true };
+    }
+    // Production path: Throw error rather than silently showing synthetic data!
+    throw err;
   }
 }
 
@@ -237,8 +279,11 @@ export async function getPortfolioOptimization(params: {
     const data = await handleResponse(res, 'Portfolio optimization failed');
     return { data, isDemo: false };
   } catch (err: any) {
-    console.warn('[FinSight AI] Live backend unreachable, activating zero-downtime portfolio simulation engine:', err?.message || err);
-    return { data: generateDemoPortfolio(params.tickers), isDemo: true };
+    if (isExplicitDemoMode()) {
+      console.info('[FinSight AI] Demo Sandbox active. Serving reference demo portfolio.');
+      return { data: generateDemoPortfolio(params.tickers), isDemo: true };
+    }
+    throw err;
   }
 }
 
@@ -252,15 +297,18 @@ export async function getNewsSentiment(ticker: string): Promise<{ data: Sentimen
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ticker })
       },
-      20000,
+      25000,
       'Sentiment analysis'
     );
 
     const data = await handleResponse(res, 'Sentiment analysis failed');
     return { data, isDemo: false };
   } catch (err: any) {
-    console.warn('[FinSight AI] Live backend unreachable, activating sentiment fallback simulation:', err?.message || err);
-    return { data: generateDemoSentiment(ticker), isDemo: true };
+    if (isExplicitDemoMode()) {
+      console.info('[FinSight AI] Demo Sandbox active. Serving reference demo sentiment.');
+      return { data: generateDemoSentiment(ticker), isDemo: true };
+    }
+    throw err;
   }
 }
 
@@ -273,15 +321,18 @@ export async function getTradeSignal(ticker: string): Promise<{ data: TradeSigna
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ticker })
       },
-      20000,
+      25000,
       'Signal prediction'
     );
 
     const data = await handleResponse(res, 'Signal prediction failed');
     return { data, isDemo: false };
   } catch (err: any) {
-    console.warn('[FinSight AI] Live backend unreachable, activating trade signal fallback simulation:', err?.message || err);
-    return { data: generateDemoSignal(ticker), isDemo: true };
+    if (isExplicitDemoMode()) {
+      console.info('[FinSight AI] Demo Sandbox active. Serving reference demo trade signal.');
+      return { data: generateDemoSignal(ticker), isDemo: true };
+    }
+    throw err;
   }
 }
 
@@ -309,11 +360,14 @@ export async function simulateRlAgent(params: {
     const data = await handleResponse(res, 'RL simulation failed');
     return { data, isDemo: false };
   } catch (err: any) {
-    console.warn('[FinSight AI] Live backend unreachable, activating RL fallback simulation:', err?.message || err);
-    return {
-      data: generateDemoRl(params.ticker, params.initial_balance, params.algo_type),
-      isDemo: true
-    };
+    if (isExplicitDemoMode()) {
+      console.info('[FinSight AI] Demo Sandbox active. Serving reference demo RL simulation.');
+      return {
+        data: generateDemoRl(params.ticker, params.initial_balance, params.algo_type),
+        isDemo: true
+      };
+    }
+    throw err;
   }
 }
 
@@ -334,8 +388,11 @@ export async function analyzeTft(ticker: string): Promise<{ data: TftData; isDem
     const data = await handleResponse(res, 'Multi-Factor Regime analysis failed');
     return { data, isDemo: false };
   } catch (err: any) {
-    console.warn('[FinSight AI] Live backend unreachable, activating TFT fallback simulation:', err?.message || err);
-    return { data: generateDemoTft(ticker), isDemo: true };
+    if (isExplicitDemoMode()) {
+      console.info('[FinSight AI] Demo Sandbox active. Serving reference demo regime analysis.');
+      return { data: generateDemoTft(ticker), isDemo: true };
+    }
+    throw err;
   }
 }
 
@@ -418,14 +475,14 @@ export async function deleteSavedPortfolio(id: number): Promise<boolean> {
     saveLocalPortfolios(local);
     return true;
   } catch (err: any) {
-    console.warn('[FinSight AI] Live backend offline, deleting portfolio locally:', err?.message || err);
+    console.warn('[FinSight AI] Live backend offline, deleting portfolio locally from browser storage:', err?.message || err);
     const local = getLocalPortfolios().filter(p => p.id !== id);
     saveLocalPortfolios(local);
     return true;
   }
 }
 
-// ==================== WATCHLIST API ====================
+// ==================== PERSISTED WATCHLISTS API ====================
 export async function listWatchlists(): Promise<Watchlist[]> {
   try {
     const res = await fetchWithDiagnostics(

@@ -306,47 +306,63 @@ export function ForecastView({ ticker }: { ticker: string }) {
                   <span>* Model auto-regularized against overfitting.</span>
                 </div>
               </div>
-            ) : activeSubTab === 'decomp' && data.decomposition ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-                <MultiLineChart
-                  title="Underlying Macro Trend"
-                  dates={data.decomposition.dates?.slice(-100) || []}
-                  height={150}
-                  series={[{ name: 'Trend', color: '#00F2FE', data: data.decomposition.trend?.slice(-100) || [] }]}
-                />
-                <MultiLineChart
-                  title="Seasonal Cycles"
-                  dates={data.decomposition.dates?.slice(-100) || []}
-                  height={120}
-                  series={[{ name: 'Seasonality', color: '#10B981', data: data.decomposition.seasonal?.slice(-100) || [] }]}
-                />
-                <MultiLineChart
-                  title="Residual Noise"
-                  dates={data.decomposition.dates?.slice(-100) || []}
-                  height={120}
-                  series={[{ name: 'Residual', color: '#F43F5E', data: data.decomposition.resid?.slice(-100) || [], dash: true }]}
-                />
-              </div>
+            ) : activeSubTab === 'decomp' ? (
+              data.decomposition && data.decomposition.trend && data.decomposition.trend.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                  <MultiLineChart
+                    title="Underlying Macro Trend"
+                    dates={data.decomposition.dates?.slice(-100) || []}
+                    height={150}
+                    series={[{ name: 'Trend', color: '#00F2FE', data: data.decomposition.trend?.slice(-100) || [] }]}
+                  />
+                  <MultiLineChart
+                    title="Seasonal Cycles"
+                    dates={data.decomposition.dates?.slice(-100) || []}
+                    height={120}
+                    series={[{ name: 'Seasonality', color: '#10B981', data: data.decomposition.seasonal?.slice(-100) || [] }]}
+                  />
+                  <MultiLineChart
+                    title="Residual Noise"
+                    dates={data.decomposition.dates?.slice(-100) || []}
+                    height={120}
+                    series={[{ name: 'Residual', color: '#F43F5E', data: data.decomposition.resid?.slice(-100) || [], dash: true }]}
+                  />
+                </div>
+              ) : (
+                <div className="glass-panel" style={{ textAlign: 'center', padding: 40, color: 'var(--text-secondary)' }}>
+                  <Info size={32} style={{ marginBottom: 12, opacity: 0.6 }} />
+                  <h4 style={{ color: '#F8FAFC', marginBottom: 6 }}>Seasonal Decomposition Unavailable</h4>
+                  <p style={{ fontSize: '0.88rem', maxWidth: 460, margin: '8px auto 0' }}>
+                    {data.decomposition?.error || 'Seasonal decomposition requires at least 2 complete seasonal cycles (24+ trading days) of price history.'}
+                  </p>
+                </div>
+              )
             ) : (
-              <div>
-                {data.backtest && (
-                  <div>
-                    <div style={{ display: 'flex', gap: 20, marginBottom: 16 }}>
-                      <div className="badge badge-emerald">Backtest Accuracy: {data.backtest.accuracy.toFixed(1)}%</div>
-                      <div className="badge badge-purple">Hold-Out RMSE: ${data.backtest.rmse.toFixed(2)}</div>
-                    </div>
-                    <MultiLineChart
-                      title="Out-of-Sample 30-Day Blind Backtest"
-                      dates={data.backtest.dates}
-                      height={320}
-                      series={[
-                        { name: 'Real Actual Price', color: '#3B82F6', data: data.backtest.actual, strokeWidth: 2.5 },
-                        { name: 'Model Blind Prediction', color: '#F43F5E', data: data.backtest.predicted, dash: true, strokeWidth: 2 }
-                      ]}
-                    />
+              data.backtest && data.backtest.actual && data.backtest.actual.length > 0 ? (
+                <div>
+                  <div style={{ display: 'flex', gap: 20, marginBottom: 16 }}>
+                    <div className="badge badge-emerald">Backtest Accuracy: {data.backtest.accuracy.toFixed(1)}%</div>
+                    <div className="badge badge-purple">Hold-Out RMSE: ${data.backtest.rmse.toFixed(2)}</div>
                   </div>
-                )}
-              </div>
+                  <MultiLineChart
+                    title="Out-of-Sample 30-Day Blind Backtest"
+                    dates={data.backtest.dates}
+                    height={320}
+                    series={[
+                      { name: 'Real Actual Price', color: '#3B82F6', data: data.backtest.actual, strokeWidth: 2.5 },
+                      { name: 'Model Blind Prediction', color: '#F43F5E', data: data.backtest.predicted, dash: true, strokeWidth: 2 }
+                    ]}
+                  />
+                </div>
+              ) : (
+                <div className="glass-panel" style={{ textAlign: 'center', padding: 40, color: 'var(--text-secondary)' }}>
+                  <Info size={32} style={{ marginBottom: 12, opacity: 0.6 }} />
+                  <h4 style={{ color: '#F8FAFC', marginBottom: 6 }}>Hold-Out Backtest Validation Unavailable</h4>
+                  <p style={{ fontSize: '0.88rem', maxWidth: 460, margin: '8px auto 0' }}>
+                    {data.backtest?.error || 'Hold-out backtest validation requires at least 40 trading days of historical data for blind testing.'}
+                  </p>
+                </div>
+              )
             )
           ) : null}
         </div>

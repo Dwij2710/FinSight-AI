@@ -12,6 +12,7 @@ if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
 from ..schemas import RlSimulateRequest, ApiResponse
+from ..services.market_data import market_data_service
 from ..utils.serializer import sanitize_for_json
 
 router = APIRouter(prefix="/api/rl", tags=["RL Trading Agent"])
@@ -130,7 +131,7 @@ async def simulate_rl_agent(req: RlSimulateRequest):
             model = train_rl_agent(
                 df,
                 initial_balance=req.initial_balance,
-                total_timesteps=min(req.timesteps, 15000),
+                total_timesteps=min(req.timesteps, 2000),
                 risk_profile=req.risk_profile,
                 action_type=req.action_type,
                 algo_type=req.algo_type
@@ -195,15 +196,26 @@ async def simulate_rl_agent(req: RlSimulateRequest):
             for i in range(0, len(dates), step)
         ]
 
+        # Determine latest price synchronized with MarketDataService
+        latest_price = round(float(df['Close'].iloc[-1]), 2)
+        try:
+            quote = market_data_service.get_quote(ticker)
+            if quote and quote.price > 0:
+                latest_price = quote.price
+        except Exception:
+            pass
+
         # Always include the last day
         if history[-1]["date"] != dates[-1]:
             history.append({
                 "date": dates[-1],
-                "price": round(float(df['Close'].iloc[-1]), 2),
+                "price": latest_price,
                 "agent_net_worth": round(float(net_worths[-1]), 2),
                 "benchmark_net_worth": round(float(buy_hold_nw[-1]), 2),
                 "action": actions[-1]
             })
+        else:
+            history[-1]["price"] = latest_price
 
         now_ts = datetime.datetime.utcnow().isoformat() + "Z"
         return ApiResponse(
@@ -212,6 +224,7 @@ async def simulate_rl_agent(req: RlSimulateRequest):
             fetched_at=now_ts,
             data=sanitize_for_json({
                 "ticker": ticker,
+                "current_price": latest_price,
                 "algo_type": req.algo_type,
                 "action_type": req.action_type,
                 "risk_profile": req.risk_profile,

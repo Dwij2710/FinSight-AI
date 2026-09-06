@@ -111,6 +111,13 @@ export function PortfolioView() {
     }
   };
 
+  // Format percentage safely whether received as ratio (0.238) or percentage (23.8)
+  const formatPct = (val?: number) => {
+    if (val === undefined || val === null || isNaN(val)) return '0.0';
+    const num = (val < 1.0 && val > -1.0 && val !== 0) ? val * 100 : val;
+    return num.toFixed(1);
+  };
+
   // Extract allocation items
   const activeWeights = activeStrategy === 'sharpe'
     ? (data?.max_sharpe.weights || {})
@@ -126,11 +133,13 @@ export function PortfolioView() {
   // Calculate Rebalance Urgency Score (0-100)
   // Divergence between equal-weight baseline (1/N) and current optimal allocation
   const tickerKeys = Object.keys(activeWeights);
-  const baselineWeight = tickerKeys.length > 0 ? 1 / tickerKeys.length : 0;
+  const isPercent = Object.values(activeWeights).some(v => v > 1.0);
+  const scale = isPercent ? 100 : 1;
+  const baselineWeight = tickerKeys.length > 0 ? scale / tickerKeys.length : 0;
   const totalDivergence = tickerKeys.reduce((acc, sym) => {
     return acc + Math.abs((activeWeights[sym] || 0) - baselineWeight);
-  }, 0) / 2;
-  const rebalanceScore = Math.min(100, Math.round(totalDivergence * 100 * 1.8));
+  }, 0) / (2 * scale);
+  const rebalanceScore = Math.min(100, Math.round(totalDivergence * 100));
 
   // Build cumulative chart series
   const cumDates = data?.cumulative_growth?.dates || [];
@@ -398,13 +407,13 @@ export function PortfolioView() {
                 <div>
                   <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Return</div>
                   <div style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--accent-emerald)' }}>
-                    +{data.max_sharpe.return.toFixed(1)}%
+                    +{formatPct(data.max_sharpe.return)}%
                   </div>
                 </div>
                 <div>
                   <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Volatility</div>
                   <div style={{ fontSize: '1.15rem', fontWeight: 700, color: '#F8FAFC' }}>
-                    {data.max_sharpe.volatility.toFixed(1)}%
+                    {formatPct(data.max_sharpe.volatility)}%
                   </div>
                 </div>
                 <div>
@@ -415,7 +424,7 @@ export function PortfolioView() {
                 </div>
               </div>
               <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: 8, fontFamily: 'var(--font-mono)' }}>
-                Sharpe = (E[R] - Rf) / σ = ({data.max_sharpe.return.toFixed(1)}% - {data.benchmark_info?.risk_free_rate_pct || 4.2}%) / {data.max_sharpe.volatility.toFixed(1)}%
+                Sharpe = (E[R] - Rf) / σ = ({formatPct(data.max_sharpe.return)}% - {data.benchmark_info?.risk_free_rate_pct || 4.2}%) / {formatPct(data.max_sharpe.volatility)}%
               </div>
             </div>
 
@@ -440,13 +449,13 @@ export function PortfolioView() {
                 <div>
                   <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Return</div>
                   <div style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--accent-emerald)' }}>
-                    +{data.min_volatility.return.toFixed(1)}%
+                    +{formatPct(data.min_volatility.return)}%
                   </div>
                 </div>
                 <div>
                   <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Volatility</div>
                   <div style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--accent-emerald)' }}>
-                    {data.min_volatility.volatility.toFixed(1)}%
+                    {formatPct(data.min_volatility.volatility)}%
                   </div>
                 </div>
                 <div>
@@ -482,19 +491,19 @@ export function PortfolioView() {
                 <div>
                   <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Return</div>
                   <div style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--accent-emerald)' }}>
-                    +{data.risk_parity?.return.toFixed(1) || data.max_sharpe.return.toFixed(1)}%
+                    +{formatPct(data.risk_parity?.return ?? data.max_sharpe.return)}%
                   </div>
                 </div>
                 <div>
                   <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Volatility</div>
                   <div style={{ fontSize: '1.15rem', fontWeight: 700, color: '#F8FAFC' }}>
-                    {data.risk_parity?.volatility.toFixed(1) || data.max_sharpe.volatility.toFixed(1)}%
+                    {formatPct(data.risk_parity?.volatility ?? data.max_sharpe.volatility)}%
                   </div>
                 </div>
                 <div>
                   <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Sharpe</div>
                   <div style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--accent-cyan)' }}>
-                    {data.risk_parity?.sharpe_ratio.toFixed(2) || data.max_sharpe.sharpe_ratio.toFixed(2)}
+                    {(data.risk_parity?.sharpe_ratio ?? data.max_sharpe.sharpe_ratio).toFixed(2)}
                   </div>
                 </div>
               </div>

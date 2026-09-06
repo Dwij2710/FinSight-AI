@@ -61,6 +61,11 @@ class StockTradingEnv(gym.Env):
             low=-np.inf, high=np.inf, shape=(9,), dtype=np.float32
         )
         
+        self.prices = np.squeeze(self.df['Close'].values).astype(float)
+        self.rsis = np.squeeze(self.df['RSI'].values).astype(float) / 100.0
+        self.macds = np.squeeze(self.df['MACD'].values).astype(float)
+        self.bb_positions = np.squeeze(self.df['BB_Position'].values).astype(float)
+
         self.current_step = 0
         self.balance = self.initial_balance
         self.shares_held = 0
@@ -68,29 +73,29 @@ class StockTradingEnv(gym.Env):
         self.max_net_worth = self.initial_balance
         
     def _next_observation(self):
-        current_price = float(self.df.loc[self.current_step, 'Close'])
-        rsi = float(self.df.loc[self.current_step, 'RSI']) / 100.0  # normalize 0 to 1
-        macd = float(self.df.loc[self.current_step, 'MACD'])
-        bb_pos = float(self.df.loc[self.current_step, 'BB_Position'])
+        current_price = float(self.prices[self.current_step])
+        rsi = float(self.rsis[self.current_step])
+        macd = float(self.macds[self.current_step])
+        bb_pos = float(self.bb_positions[self.current_step])
         
         if self.current_step > 0:
-            prev_price = float(self.df.loc[self.current_step-1, 'Close'])
-            day_pct = (current_price - prev_price) / prev_price
+            prev_price = float(self.prices[self.current_step - 1])
+            day_pct = (current_price - prev_price) / prev_price if prev_price > 0 else 0.0
         else:
             day_pct = 0.0
             
         if self.current_step > 5:
-            prev_5_day_price = float(self.df.loc[self.current_step-5, 'Close'])
-            five_day_pct = (current_price - prev_5_day_price) / prev_5_day_price
+            prev_5_day_price = float(self.prices[self.current_step - 5])
+            five_day_pct = (current_price - prev_5_day_price) / prev_5_day_price if prev_5_day_price > 0 else 0.0
         else:
             five_day_pct = 0.0
             
-        first_price = float(self.df['Close'].iloc[0])
+        first_price = float(self.prices[0])
             
         obs = np.array([
             self.balance / self.initial_balance,
             self.shares_held,
-            current_price / first_price,
+            current_price / first_price if first_price > 0 else 1.0,
             self.net_worth / self.initial_balance,
             day_pct,
             five_day_pct,
@@ -102,44 +107,58 @@ class StockTradingEnv(gym.Env):
         return obs
 
     def step(self, action):
-        current_price = float(self.df.loc[self.current_step, 'Close'])
+        current_price = float(self.prices[self.current_step])
         prev_net_worth = self.net_worth
         
         # Log textual action for UI tracking
         action_text = "Hold"
         
+        # Institutional execution modeling: 5 bps commission, 2 bps slippage
+        COMMISSION_RATE = 0.0005
+        SLIPPAGE_RATE = 0.0002
+
         if self.action_type == 'Continuous':
-            # action is a float between -1.0 and 1.0 array
             act_val = float(action[0])
             
-            if act_val > 0.05: # Buy fraction of available cash
+            if act_val > 0.05 and self.balance > current_price:
                 cash_to_spend = self.balance * act_val
-                shares_bought = int(cash_to_spend / current_price)
+                buy_price = current_price * (1 + SLIPPAGE_RATE)
+                shares_bought = int(cash_to_spend / (buy_price * (1 + COMMISSION_RATE)))
                 if shares_bought > 0:
-                    self.balance -= shares_bought * current_price
+                    cost = shares_bought * buy_price
+                    fee = cost * COMMISSION_RATE
+                    self.balance -= (cost + fee)
                     self.shares_held += shares_bought
-                    action_text = "Buy Fractional"
-            elif act_val < -0.05: # Sell fraction of held shares
+                    action_text = f"Buy {int(act_val*100)}%"
+            elif act_val < -0.05 and self.shares_held > 0:
                 fraction_to_sell = abs(act_val)
                 shares_to_sell = int(self.shares_held * fraction_to_sell)
                 if shares_to_sell > 0:
-                    self.balance += shares_to_sell * current_price
+                    sell_price = current_price * (1 - SLIPPAGE_RATE)
+                    gross = shares_to_sell * sell_price
+                    fee = gross * COMMISSION_RATE
+                    self.balance += (gross - fee)
                     self.shares_held -= shares_to_sell
-                    action_text = "Sell Fractional"
+                    action_text = f"Sell {int(fraction_to_sell*100)}%"
                     
         else:
             # Discrete logic
-            if action == 1: 
-                shares_bought = int(self.balance / current_price)
+            if action == 1 and self.balance > current_price: 
+                buy_price = current_price * (1 + SLIPPAGE_RATE)
+                shares_bought = int(self.balance / (buy_price * (1 + COMMISSION_RATE)))
                 if shares_bought > 0:
-                    self.balance -= shares_bought * current_price
+                    cost = shares_bought * buy_price
+                    fee = cost * COMMISSION_RATE
+                    self.balance -= (cost + fee)
                     self.shares_held += shares_bought
-                    action_text = "Buy All"
-            elif action == 2: 
-                if self.shares_held > 0:
-                    self.balance += self.shares_held * current_price
-                    self.shares_held = 0
-                    action_text = "Sell All"
+                    action_text = "Buy Max"
+            elif action == 2 and self.shares_held > 0: 
+                sell_price = current_price * (1 - SLIPPAGE_RATE)
+                gross = self.shares_held * sell_price
+                fee = gross * COMMISSION_RATE
+                self.balance += (gross - fee)
+                self.shares_held = 0
+                action_text = "Sell All"
                 
         # Update net worth
         self.net_worth = self.balance + self.shares_held * current_price

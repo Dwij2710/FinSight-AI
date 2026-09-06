@@ -1,6 +1,4 @@
-// TypeScript Definitions for FinSight AI
-
-export type DataSourceType = 'live' | 'cache' | 'simulated';
+export type DataSourceType = 'live' | 'polygon' | 'yfinance' | 'cache' | 'stale_cache' | 'simulated';
 
 export interface BaseDataProvenance {
   data_source?: DataSourceType;

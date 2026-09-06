@@ -10,8 +10,17 @@ import { RlAgentView } from '../components/RlAgentView';
 import { TftView } from '../components/TftView';
 import { WatchlistView } from '../components/WatchlistView';
 import { AboutView } from '../components/AboutView';
+import { MarketDataProvider } from '../context/MarketDataContext';
 
 export default function Home() {
+  return (
+    <MarketDataProvider>
+      <DashboardContent />
+    </MarketDataProvider>
+  );
+}
+
+function DashboardContent() {
   const [activeTab, setActiveTab] = useState<'forecast' | 'portfolio' | 'watchlists' | 'ai' | 'rl' | 'tft' | 'about'>('forecast');
   const [ticker, setTicker] = useState('AAPL');
   const [searchInput, setSearchInput] = useState('');

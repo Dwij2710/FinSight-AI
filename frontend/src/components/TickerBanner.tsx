@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { TrendingUp, TrendingDown, Clock, Globe, ChevronRight } from 'lucide-react';
-import { getLiveTickerQuotes } from '../lib/api';
 import { LiveTickerQuote, DataSourceType } from '../lib/types';
+import { useMarketData } from '../context/MarketDataContext';
 
 interface TickerBannerProps {
   activeTicker: string;
@@ -11,45 +11,36 @@ interface TickerBannerProps {
 }
 
 export function TickerBanner({ activeTicker, onSelectTicker }: TickerBannerProps) {
-  const [quotes, setQuotes] = useState<LiveTickerQuote[]>([]);
-  const [dataSource, setDataSource] = useState<DataSourceType>('live');
+  const { quotes: quoteMap, freshnessState } = useMarketData();
   const [hoveredTicker, setHoveredTicker] = useState<string | null>(null);
   const [flashTickers, setFlashTickers] = useState<Record<string, boolean>>({});
   const prevPrices = useRef<Record<string, number>>({});
 
   const targetSymbols = ['SPY', 'QQQ', 'AAPL', 'NVDA', 'MSFT', 'RELIANCE.NS', 'TCS.NS', '^NSEI'];
+  const quotes: LiveTickerQuote[] = targetSymbols
+    .map(sym => quoteMap[sym])
+    .filter((q): q is LiveTickerQuote => Boolean(q));
 
-  const fetchQuotes = async () => {
-    try {
-      const res = await getLiveTickerQuotes(targetSymbols);
-      if (res && res.quotes && res.quotes.length > 0) {
-        // Check for price changes to trigger subtle pulse
-        const flashes: Record<string, boolean> = {};
-        res.quotes.forEach(q => {
-          if (prevPrices.current[q.ticker] !== undefined && prevPrices.current[q.ticker] !== q.price) {
-            flashes[q.ticker] = true;
-          }
-          prevPrices.current[q.ticker] = q.price;
-        });
-
-        if (Object.keys(flashes).length > 0) {
-          setFlashTickers(flashes);
-          setTimeout(() => setFlashTickers({}), 1200);
-        }
-
-        setQuotes(res.quotes);
-        setDataSource(res.dataSource);
-      }
-    } catch (e) {
-      console.warn('[TickerBanner] Failed to refresh quotes:', e);
-    }
-  };
+  const dataSource: DataSourceType = freshnessState === 'DEMO_SIMULATION'
+    ? 'simulated'
+    : (freshnessState === 'LIVE_DELAYED' ? 'cache' : 'live');
 
   useEffect(() => {
-    fetchQuotes();
-    const interval = setInterval(fetchQuotes, 20000); // 20s polling interval
-    return () => clearInterval(interval);
-  }, []);
+    if (quotes.length > 0) {
+      const flashes: Record<string, boolean> = {};
+      quotes.forEach(q => {
+        if (prevPrices.current[q.ticker] !== undefined && prevPrices.current[q.ticker] !== q.price) {
+          flashes[q.ticker] = true;
+        }
+        prevPrices.current[q.ticker] = q.price;
+      });
+
+      if (Object.keys(flashes).length > 0) {
+        setFlashTickers(flashes);
+        setTimeout(() => setFlashTickers({}), 1200);
+      }
+    }
+  }, [quotes]);
 
   // Compute exchange market open status based on current UTC time
   const getExchangeStatus = () => {

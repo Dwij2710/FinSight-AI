@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 
@@ -60,8 +60,7 @@ class PortfolioItemResponse(BaseModel):
     target_weight: float
     asset_class: Optional[str] = "Equity"
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class PortfolioCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
@@ -76,8 +75,7 @@ class PortfolioResponse(BaseModel):
     updated_at: datetime
     items: List[PortfolioItemResponse] = Field(default_factory=list)
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class WatchlistItemCreate(BaseModel):
     ticker: str
@@ -90,8 +88,7 @@ class WatchlistItemResponse(BaseModel):
     notes: Optional[str] = None
     added_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class WatchlistCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
@@ -102,8 +99,27 @@ class WatchlistResponse(BaseModel):
     created_at: datetime
     items: List[WatchlistItemResponse] = Field(default_factory=list)
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
+
+# ==================== CANONICAL QUOTE SCHEMA ====================
+class CanonicalQuote(BaseModel):
+    ticker: str
+    price: float
+    change: float
+    change_pct: float
+    open_price: float
+    day_high: float
+    day_low: float
+    prev_close: float
+    year_low: Optional[float] = None
+    year_high: Optional[float] = None
+    volume: int
+    currency: str = "USD"
+    exchange: str = "US"
+    market_state: str = "OPEN"
+    timestamp: str
+    data_source: str = "live"
+    is_stale: bool = False
 
 # ==================== GENERIC RESPONSE SCHEMA ====================
 class ApiResponse(BaseModel):

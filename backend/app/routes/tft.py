@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 import pandas as pd
 import numpy as np
+import datetime
 import sys
 from pathlib import Path
 
@@ -11,6 +12,7 @@ if _PROJECT_ROOT not in sys.path:
 
 from src.tft_features import MultiVariateDataFetcher, MultiFactorRegimeModel
 from ..schemas import TftRequest, ApiResponse
+from ..services.market_data import market_data_service
 from ..utils.serializer import sanitize_for_json
 
 router = APIRouter(prefix="/api/tft", tags=["Multi-Factor Regime"])
@@ -29,6 +31,12 @@ async def analyze_tft(req: TftRequest):
             raise HTTPException(status_code=404, detail=f"Failed to fetch multi-variate macro data for {ticker}")
 
         current_price = float(data['Price'].iloc[-1])
+        try:
+            quote = market_data_service.get_quote(ticker)
+            if quote and quote.price > 0:
+                current_price = quote.price
+        except Exception:
+            pass
         sp_val = float(data['S&P 500'].iloc[-1]) if 'S&P 500' in data.columns else 0.0
         vix_val = float(data['VIX'].iloc[-1]) if 'VIX' in data.columns else 0.0
 

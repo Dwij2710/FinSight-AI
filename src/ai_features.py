@@ -651,7 +651,20 @@ class FinBERTAnalyzer:
                         content = item.get('content', {})
                         title = content.get('title', '')
                         publisher = content.get('provider', {}).get('displayName', '') if isinstance(content.get('provider'), dict) else ''
-                        link = item.get('link', '')
+                        
+                        link = ''
+                        if isinstance(content.get('canonicalUrl'), dict):
+                            link = content.get('canonicalUrl', {}).get('url', '')
+                        elif isinstance(content.get('canonicalUrl'), str):
+                            link = content.get('canonicalUrl')
+                        if not link:
+                            if isinstance(content.get('clickThroughUrl'), dict):
+                                link = content.get('clickThroughUrl', {}).get('url', '')
+                            elif isinstance(content.get('clickThroughUrl'), str):
+                                link = content.get('clickThroughUrl')
+                        if not link:
+                            link = content.get('previewUrl') or item.get('link', '')
+
                         pub_time = content.get('pubDate', '')
                     else:
                         title = item.get('title', '')
@@ -665,6 +678,9 @@ class FinBERTAnalyzer:
                 
                 if not title:
                     continue
+
+                if not link or link == '#':
+                    link = f"https://finance.yahoo.com/quote/{self.ticker}/news"
                     
                 score, label = self._analyze_text(title)
                 data.append({
