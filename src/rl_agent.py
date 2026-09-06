@@ -1,12 +1,25 @@
+import os
+import sys
 import numpy as np
 import pandas as pd
 import gymnasium as gym
 from gymnasium import spaces
+
+if sys.platform == "win32":
+    torch_lib = os.path.join(sys.prefix, "Lib", "site-packages", "torch", "lib")
+    if os.path.exists(torch_lib) and hasattr(os, "add_dll_directory"):
+        try:
+            os.add_dll_directory(torch_lib)
+        except Exception:
+            pass
+
 from stable_baselines3 import PPO, A2C, DQN
 
 def add_technical_indicators(df):
-    """Calculates RSI, MACD, and Bollinger Bands natively."""
+    """Calculates RSI, MACD, and Bollinger Bands natively with strict chronological ordering."""
     df = df.copy()
+    if hasattr(df, 'sort_index'):
+        df = df.sort_index()
     
     # RSI (14-day)
     delta = df['Close'].diff()

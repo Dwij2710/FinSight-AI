@@ -129,10 +129,16 @@ class NeuralNetForecaster:
         self.test_score = 0.0 
         
     def prepare_data(self):
-        # Convert to numpy array
+        # Enforce strict chronological order
+        if hasattr(self.data, 'sort_index'):
+            self.data = self.data.sort_index()
         dataset = self.data.values.reshape(-1, 1)
-        # Normalize
-        self.scaled_data = self.scaler.fit_transform(dataset)
+        
+        # Fit scaler strictly on historical training partition (90%) to eliminate look-ahead leakage
+        split_idx = int(len(dataset) * 0.9)
+        train_slice = dataset[:split_idx]
+        self.scaler.fit(train_slice)
+        self.scaled_data = self.scaler.transform(dataset)
         
         # Split into X and y
         X, y = [], []
@@ -210,7 +216,9 @@ class TrendClassifier:
         if len(self.data) < 14:
             return self.data
             
-        df = self.data.to_frame() if isinstance(self.data, pd.Series) else self.data
+        df = self.data.to_frame() if isinstance(self.data, pd.Series) else self.data.copy()
+        if hasattr(df, 'sort_index'):
+            df = df.sort_index()
         if 'Close' not in df.columns:
              # Assume single column is close
              df.columns = ['Close']
@@ -366,9 +374,16 @@ class LSTMForecaster:
         return df
     
     def prepare_data(self):
-        """Prepare and scale data."""
+        """Prepare and scale data with strict chronological sorting and isolated train scaler."""
+        if hasattr(self.data, 'sort_index'):
+            self.data = self.data.sort_index()
         dataset = self.data.values.reshape(-1, 1)
-        self.scaled_data = self.scaler.fit_transform(dataset)
+        
+        # Fit scaler strictly on historical training partition (90%) to eliminate look-ahead leakage
+        split_idx = int(len(dataset) * 0.9)
+        train_slice = dataset[:split_idx]
+        self.scaler.fit(train_slice)
+        self.scaled_data = self.scaler.transform(dataset)
         
         if self.use_lstm:
             # LSTM format

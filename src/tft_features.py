@@ -2,7 +2,7 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
-from sklearn.ensemble import RandomForestRegressor, IsolationForest
+from sklearn.ensemble import RandomForestRegressor, IsolationForest, GradientBoostingRegressor
 from sklearn.neighbors import NearestNeighbors
 import datetime
 
@@ -48,8 +48,8 @@ class MultiVariateDataFetcher:
 
 class MultiFactorRegimeModel:
     """
-    Multi-Factor Macro Regime Analysis using Random Forest Feature Attribution,
-    Isolation Forest Anomaly Detection, and Multivariate OLS Factor Regression.
+    Multi-Factor Macro Regime Analysis using Quantile Gradient Boosting,
+    Random Forest MDI Factor Attribution, and Isolation Forest Anomaly Detection.
     """
     def __init__(self, data):
         self.data = data
@@ -59,6 +59,8 @@ class MultiFactorRegimeModel:
         
     def prepare_data(self):
         df = self.data.copy()
+        if hasattr(df, 'sort_index'):
+            df = df.sort_index()
         
         # Calculate Returns as additional input features
         for col in df.columns:
@@ -78,65 +80,118 @@ class MultiFactorRegimeModel:
         
         return X, y, features
         
-    def train_and_extract_attention(self):
+    def calculate_factor_attributions(self):
+        """
+        Calculates genuine Mean Decrease in Impurity (MDI) factor attribution 
+        across macroeconomic, momentum, and volatility dimensions.
+        """
         try:
             X, y, features = self.prepare_data()
+            if X.empty:
+                return {}
             
             X_scaled = self.scaler.fit_transform(X)
             self.model.fit(X_scaled, y)
             
             importances = self.model.feature_importances_
             
-            attention_weights = {
-                'Price Trend': np.sum([importances[i] for i, f in enumerate(features) if 'Price' in f]),
-                'Overall Market (S&P 500)': np.sum([importances[i] for i, f in enumerate(features) if 'S&P 500' in f]),
-                'Fear Index (VIX)': np.sum([importances[i] for i, f in enumerate(features) if 'VIX' in f]),
-                'Interest Rates': np.sum([importances[i] for i, f in enumerate(features) if 'Interest Rating' in f or 'Interest Rate' in f]),
-                'Gold (Safe Haven)': np.sum([importances[i] for i, f in enumerate(features) if 'Gold' in f]),
-                'Crude Oil': np.sum([importances[i] for i, f in enumerate(features) if 'Crude Oil' in f]),
-                'US Dollar Strength': np.sum([importances[i] for i, f in enumerate(features) if 'US Dollar' in f])
+            raw_weights = {
+                'Price Trend & Momentum': float(np.sum([importances[i] for i, f in enumerate(features) if 'Price' in f])),
+                'Overall Market (S&P 500)': float(np.sum([importances[i] for i, f in enumerate(features) if 'S&P 500' in f])),
+                'Fear Index (VIX)': float(np.sum([importances[i] for i, f in enumerate(features) if 'VIX' in f])),
+                'Interest Rates (10Y Yield)': float(np.sum([importances[i] for i, f in enumerate(features) if 'Interest' in f])),
+                'Gold (Safe Haven)': float(np.sum([importances[i] for i, f in enumerate(features) if 'Gold' in f])),
+                'Crude Oil': float(np.sum([importances[i] for i, f in enumerate(features) if 'Crude Oil' in f])),
+                'US Dollar Strength': float(np.sum([importances[i] for i, f in enumerate(features) if 'US Dollar' in f]))
             }
             
-            # Normalize to 1.0
-            total = sum(attention_weights.values())
+            # Normalize to 1.0 (100%)
+            total = sum(raw_weights.values())
             if total > 0:
-                attention_weights = {k: float(v)/total for k, v in attention_weights.items()}
+                attribution_weights = {k: float(v) / total for k, v in raw_weights.items()}
+            else:
+                attribution_weights = {k: 1.0 / len(raw_weights) for k in raw_weights}
                 
-            return attention_weights
+            return attribution_weights
         except Exception as e:
-            print(f"Error in attention extraction: {e}")
+            print(f"Error in factor attribution extraction: {e}")
             return {}
-            
+
+    # Backward compatibility alias for legacy tests and references
+    train_and_extract_attention = calculate_factor_attributions
+
     def probabilistic_forecast(self, current_price):
+        """
+        Fits Quantile Gradient Boosting Regressors at alpha=0.10, 0.50 (median), and 0.90
+        to generate non-parametric empirical prediction intervals with pinball loss validation.
+        """
         try:
             X, y, features = self.prepare_data()
-            X_scaled = self.scaler.fit_transform(X)
-            self.model.fit(X_scaled, y)
-
-            latest_features = self.scaler.transform(X.iloc[[-1]])
-            base_pred = float(self.model.predict(latest_features)[0])
+            if len(X) < 30:
+                return None
             
-            # Compute empirical confidence interval from residual standard error
-            in_sample_preds = self.model.predict(X_scaled)
-            residuals = y.values - in_sample_preds
-            rse = float(np.std(residuals))
-            margin = 1.96 * max(rse, current_price * 0.01)
-            
-            lower_bound = max(0.0, base_pred - margin)
-            upper_bound = base_pred + margin
+            # Chronological 80/20 train/test split to validate empirical coverage
+            split_idx = int(len(X) * 0.8)
+            X_train, X_test = X.iloc[:split_idx], X.iloc[split_idx:]
+            y_train, y_test = y.iloc[:split_idx], y.iloc[split_idx:]
 
-            # Calculate statistical accuracy metric from MAPE
+            scaler = MinMaxScaler()
+            X_train_scaled = scaler.fit_transform(X_train)
+            X_test_scaled = scaler.transform(X_test)
+            X_all_scaled = scaler.fit_transform(X)
+
+            # Fit 3 quantile estimators (pinball loss)
+            gbr_q10 = GradientBoostingRegressor(loss='quantile', alpha=0.10, n_estimators=60, random_state=42)
+            gbr_q50 = GradientBoostingRegressor(loss='quantile', alpha=0.50, n_estimators=60, random_state=42)
+            gbr_q90 = GradientBoostingRegressor(loss='quantile', alpha=0.90, n_estimators=60, random_state=42)
+
+            gbr_q10.fit(X_train_scaled, y_train)
+            gbr_q50.fit(X_train_scaled, y_train)
+            gbr_q90.fit(X_train_scaled, y_train)
+
+            # Holdout validation metrics
+            test_preds_q10 = gbr_q10.predict(X_test_scaled)
+            test_preds_q50 = gbr_q50.predict(X_test_scaled)
+            test_preds_q90 = gbr_q90.predict(X_test_scaled)
+
+            # Empirical coverage: % of actual test points falling inside [q10, q90]
+            covered = np.logical_and(y_test.values >= test_preds_q10, y_test.values <= test_preds_q90)
+            empirical_coverage = float(np.mean(covered) * 100.0) if len(y_test) > 0 else 80.0
+
             with np.errstate(divide='ignore', invalid='ignore'):
-                mape = float(np.nanmean(np.abs(residuals / y.values)) * 100)
-            confidence_score = max(50.0, min(99.0, 100.0 - mape))
-            
+                holdout_mape = float(np.nanmean(np.abs((y_test.values - test_preds_q50) / y_test.values)) * 100.0)
+
+            # Refit on all available data for final forward projection
+            gbr_q10.fit(X_all_scaled, y)
+            gbr_q50.fit(X_all_scaled, y)
+            gbr_q90.fit(X_all_scaled, y)
+
+            latest_features = scaler.transform(X.iloc[[-1]])
+            pred_q10 = float(gbr_q10.predict(latest_features)[0])
+            pred_q50 = float(gbr_q50.predict(latest_features)[0])
+            pred_q90 = float(gbr_q90.predict(latest_features)[0])
+
+            # Monotonic ordering enforcement: q10 <= q50 <= q90
+            pred_q10 = min(pred_q10, pred_q50)
+            pred_q90 = max(pred_q90, pred_q50)
+
+            # Truthful confidence score based on holdout calibration & error
+            confidence_score = round(max(10.0, min(95.0, 100.0 - (holdout_mape * 1.5) - abs(empirical_coverage - 80.0) * 0.5)), 1)
+
             return {
-                'predicted': float(base_pred),
-                'lower': float(lower_bound),
-                'upper': float(upper_bound),
-                'confidence': round(confidence_score, 1)
+                'predicted': round(float(pred_q50), 2),
+                'median': round(float(pred_q50), 2),
+                'q10': round(float(pred_q10), 2),
+                'q90': round(float(pred_q90), 2),
+                'lower': round(float(pred_q10), 2),
+                'upper': round(float(pred_q90), 2),
+                'empirical_coverage_pct': round(empirical_coverage, 1),
+                'holdout_mape': round(holdout_mape, 2),
+                'confidence': confidence_score,
+                'method': 'Quantile Gradient Boosting (Pinball Loss q10/q50/q90)'
             }
         except Exception as e:
+            print(f"Quantile forecast error: {e}")
             return None
 
     def detect_macro_anomaly(self):
@@ -146,14 +201,18 @@ class MultiFactorRegimeModel:
         """
         try:
             X, _, _ = self.prepare_data()
-            X_scaled = self.scaler.fit_transform(X)
+            if len(X) < 10:
+                return {'is_anomaly': False, 'risk_score': 0.0, 'message': "Unable to detect."}
+
+            scaler = MinMaxScaler()
+            X_hist_scaled = scaler.fit_transform(X.iloc[:-1])
+            current_state = scaler.transform(X.iloc[[-1]])
             
             # Train Isolation Forest on everything EXCEPT the current day
             iso_forest = IsolationForest(contamination=0.05, random_state=42)
-            iso_forest.fit(X_scaled[:-1])
+            iso_forest.fit(X_hist_scaled)
             
             # Predict the current day
-            current_state = X_scaled[[-1]]
             anomaly_score = iso_forest.decision_function(current_state)[0] # negative means anomaly
             is_anomaly = iso_forest.predict(current_state)[0] == -1
             
@@ -176,17 +235,20 @@ class MultiFactorRegimeModel:
         """
         try:
             X, _, _ = self.prepare_data()
-            X_scaled = self.scaler.fit_transform(X)
-            
-            # Exclude the last 30 days so we can actually see a full 30-day follow-up period
-            search_pool = X_scaled[:-30]
-            dates = X.index[:-30]
+            if len(X) < 40:
+                return None
+
+            # Scaler fitted strictly on search pool to avoid future leakage
+            scaler = MinMaxScaler()
+            search_pool_raw = X.iloc[:-30]
+            search_pool = scaler.fit_transform(search_pool_raw)
+            dates = search_pool_raw.index
             price_history = self.data['Price']
             
             knn = NearestNeighbors(n_neighbors=1, metric='euclidean')
             knn.fit(search_pool)
             
-            current_state = X_scaled[[-1]]
+            current_state = scaler.transform(X.iloc[[-1]])
             distances, indices = knn.kneighbors(current_state)
             
             matched_idx = indices[0][0]

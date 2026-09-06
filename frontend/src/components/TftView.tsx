@@ -44,7 +44,11 @@ export function TftView({ ticker }: { ticker: string }) {
     'Gold': 'Macro hedge & flight-to-safety flow'
   };
 
-  const attentionItems = (data?.attention_weights || []).map(a => ({
+  const factorList = (data?.factor_attributions && data.factor_attributions.length > 0)
+    ? data.factor_attributions
+    : (data?.attention_weights || []);
+
+  const attentionItems = factorList.map(a => ({
     label: a.factor,
     value: a.weight_pct,
     annotation: factorAnnotations[a.factor]
@@ -57,7 +61,7 @@ export function TftView({ ticker }: { ticker: string }) {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
             <h2 style={{ fontSize: '1.6rem', margin: 0 }}>
-              Multi-Variate <span className="text-gradient">Transformer (TFT)</span>
+              Multi-Factor <span className="text-gradient">Macro & Quantile Forecaster</span>
             </h2>
             <span style={{
               background: 'rgba(255, 255, 255, 0.05)',
@@ -69,11 +73,11 @@ export function TftView({ ticker }: { ticker: string }) {
               color: 'var(--text-primary)',
               fontWeight: 600
             }}>
-              {ticker} Macro Regime
+              {ticker} Macro Multi-Factor
             </span>
           </div>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', margin: 0 }}>
-            Correlates multiple macroeconomic factors simultaneously: S&P 500, VIX, 10Y Yields, Crude Oil, and Gold.
+            Macroeconomic factor attribution and empirical quantile predictions across S&P 500, VIX, 10Y Yields, Crude Oil, and Gold.
           </p>
         </div>
 
@@ -167,14 +171,14 @@ export function TftView({ ticker }: { ticker: string }) {
           )}
         </div>
 
-        {/* Transformer Attention Weights */}
+        {/* Macro Factor Attributions (MDI) */}
         <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Layers size={20} color="var(--accent-cyan)" />
             <div>
-              <h3 style={{ fontSize: '1.15rem' }}>Transformer Factor Attention Weights</h3>
+              <h3 style={{ fontSize: '1.15rem' }}>Macro Factor Attributions (MDI Feature Importance)</h3>
               <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                Relative mathematical importance assigned to each global macro variable.
+                Relative mathematical importance calculated via Random Forest MDI across macroeconomic variables.
               </p>
             </div>
           </div>

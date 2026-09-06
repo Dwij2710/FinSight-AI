@@ -15,9 +15,10 @@ from ..schemas import TftRequest, ApiResponse
 from ..services.market_data import market_data_service
 from ..utils.serializer import sanitize_for_json
 
-router = APIRouter(prefix="/api/tft", tags=["Multi-Factor Regime"])
+router = APIRouter(tags=["Multi-Factor Macro Regime"])
 
-@router.post("/analyze", response_model=ApiResponse)
+@router.post("/api/tft/analyze", response_model=ApiResponse)
+@router.post("/api/multifactor/analyze", response_model=ApiResponse)
 async def analyze_tft(req: TftRequest):
     try:
         ticker = req.ticker.strip().upper()
@@ -97,6 +98,11 @@ async def analyze_tft(req: TftRequest):
                 "regime_desc": regime_desc,
                 "data_source": "live",
                 "fetched_at": now_ts,
+                "model_architecture": "Multi-Factor Macro Regime & Quantile Gradient Boosting Regressor (Pinball Loss)",
+                "factor_attributions": [
+                    {"factor": k, "weight_pct": round(float(v * 100), 2), "method": "MDI"}
+                    for k, v in attention_weights.items()
+                ],
                 "attention_weights": [
                     {"factor": k, "weight_pct": round(float(v * 100), 2)}
                     for k, v in attention_weights.items()

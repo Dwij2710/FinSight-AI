@@ -1,22 +1,30 @@
 """
 FinSight AI - Centralized Market Data Service
-Provides single source of truth for all live market quotes and intraday telemetry.
-Guarantees consistent pricing across TickerBanner, Forecast, Portfolio, RL, and TFT views.
+Provides single source of truth for all live market quotes, intraday telemetry,
+and historical OHLCV time series with distributed Redis + In-Memory caching.
+Guarantees:
+- Explicit data freshness: 'realtime' vs 'delayed_15m' vs 'cached' vs 'historical'
+- Zero synthetic number fabrication
+- Stale-data detection and graceful degradation
+- Centralized timeout, retry, and rate-limit handling
 """
 import time
 import datetime
 import pytz
+import pandas as pd
 from typing import Dict, List, Optional, Any, Tuple
 import yfinance as yf
 from fastapi import HTTPException
 
 from ..schemas import CanonicalQuote
+from .cache import cache_service
 from src.polygon_client import PolygonClient
 
 class MarketDataService:
-    def __init__(self, cache_ttl_seconds: int = 15):
-        self.cache_ttl = cache_ttl_seconds
-        # In-memory quote cache: {ticker: (timestamp, CanonicalQuote)}
+    def __init__(self, quote_ttl_seconds: int = 15, history_ttl_seconds: int = 900):
+        self.quote_ttl = quote_ttl_seconds
+        self.cache_ttl = quote_ttl_seconds
+        self.history_ttl = history_ttl_seconds
         self._quote_cache: Dict[str, Tuple[float, CanonicalQuote]] = {}
         self.polygon_client = PolygonClient()
 
@@ -76,6 +84,8 @@ class MarketDataService:
         open_p = float(prev.get("open", close_p))
         change = close_p - open_p
         change_pct = (change / open_p * 100) if open_p > 0 else 0.0
+        market_state = self.is_market_open(ticker)
+        freshness = "realtime" if market_state == "OPEN" else "historical"
 
         return CanonicalQuote(
             ticker=ticker,
@@ -89,9 +99,11 @@ class MarketDataService:
             volume=int(prev.get("volume", 0)),
             currency=currency,
             exchange=exchange,
-            market_state=self.is_market_open(ticker),
+            market_state=market_state,
             timestamp=datetime.datetime.utcnow().isoformat() + "Z",
             data_source="polygon",
+            freshness=freshness,
+            provider="polygon",
             is_stale=False
         )
 
@@ -144,6 +156,9 @@ class MarketDataService:
         change = last_price - prev_close
         change_pct = (change / prev_close * 100) if prev_close > 0 else 0.0
 
+        # Yahoo finance free data during market hours is delayed ~15 minutes
+        freshness = "delayed_15m" if market_state == "OPEN" else "historical"
+
         return CanonicalQuote(
             ticker=ticker,
             price=round(last_price, 2),
@@ -161,25 +176,40 @@ class MarketDataService:
             market_state=market_state,
             timestamp=datetime.datetime.utcnow().isoformat() + "Z",
             data_source="yfinance",
+            freshness=freshness,
+            provider="yfinance",
             is_stale=False
         )
 
     def get_quote(self, ticker: str) -> CanonicalQuote:
         """
         Returns authoritative quote.
-        Checks TTL cache -> Polygon -> Yahoo Finance -> Stale Cache.
-        NEVER returns synthetic hardcoded numbers.
+        Checks Redis/Memory Cache -> Polygon -> Yahoo Finance -> Stale Fallback.
+        Exposes honest data freshness: 'realtime', 'delayed_15m', 'cached', or 'historical'.
         """
         sym = ticker.strip().upper()
         now = time.time()
+        cache_key = f"quote:{sym}"
 
-        # 1. Fresh cache hit
+        # 0. Fast local quote cache check
         if sym in self._quote_cache:
             ts, cached_quote = self._quote_cache[sym]
             if now - ts < self.cache_ttl:
-                return cached_quote
+                cached_copy = cached_quote.model_copy()
+                cached_copy.data_source = "cached"
+                cached_copy.freshness = "cached"
+                return cached_copy
 
-        # 2. Live fetch (Polygon primary for US, yfinance fallback/international)
+        # 1. Fresh cache check
+        cached_dict = cache_service.get_sync(cache_key)
+        if cached_dict:
+            quote = CanonicalQuote.model_validate(cached_dict)
+            quote.data_source = "cached"
+            quote.freshness = "cached"
+            self._quote_cache[sym] = (now, quote)
+            return quote
+
+        # 2. Live Provider Query
         quote = None
         try:
             quote = self._fetch_from_polygon(sym)
@@ -194,20 +224,26 @@ class MarketDataService:
 
         if quote:
             self._quote_cache[sym] = (now, quote)
+            # Determine TTL: 15s during market open, 300s when closed
+            ttl = self.quote_ttl if quote.market_state == "OPEN" else 300
+            cache_service.set_sync(cache_key, quote.model_dump(mode="json"), ttl_seconds=ttl)
+            # Also store under persistent stale fallback key
+            cache_service.set_sync(f"stale_quote:{sym}", quote.model_dump(mode="json"), ttl_seconds=86400)
             return quote
 
-        # 3. Degraded state: Stale cache fallback (if provider is temporarily unreachable)
-        if sym in self._quote_cache:
-            ts, stale_quote = self._quote_cache[sym]
-            stale_copy = stale_quote.model_copy()
-            stale_copy.is_stale = True
-            stale_copy.data_source = "stale_cache"
-            return stale_copy
+        # 3. Degraded Stale Fallback (Provider outage recovery)
+        stale_dict = cache_service.get_sync(f"stale_quote:{sym}")
+        if stale_dict:
+            stale_quote = CanonicalQuote.model_validate(stale_dict)
+            stale_quote.is_stale = True
+            stale_quote.data_source = "stale_fallback"
+            stale_quote.freshness = "cached"
+            return stale_quote
 
-        # 4. Outage state: No synthetic fabrication! Raise clean HTTP 503
+        # 4. Outage state: No synthetic fabrication!
         raise HTTPException(
             status_code=503,
-            detail=f"Live market quote temporarily unavailable for '{sym}' from providers. Please retry in a few moments."
+            detail=f"Live market quote temporarily unavailable for '{sym}' from market data providers. Please retry in a few moments."
         )
 
     def get_quotes(self, tickers: List[str]) -> List[CanonicalQuote]:
@@ -220,5 +256,31 @@ class MarketDataService:
                 print(f"[MarketDataService] Error querying quote for {t}: {err}")
         return results
 
-# Singleton instance
+    def get_history(self, ticker: str, start_date: str, end_date: str) -> pd.DataFrame:
+        """
+        Centralized historical daily bar fetcher with caching and provider routing.
+        Returns clean DataFrame with DatetimeIndex and ['Open', 'High', 'Low', 'Close', 'Volume'].
+        """
+        from src.data_fetcher import DataFetcher
+        clean_ticker = ticker.strip().upper()
+        cache_key = f"history:{clean_ticker}:{start_date}:{end_date}"
+
+        cached_json = cache_service.get_sync(cache_key)
+        if cached_json:
+            try:
+                df = pd.read_json(cached_json, orient="split")
+                return df
+            except Exception:
+                pass
+
+        fetcher = DataFetcher()
+        df = fetcher.fetch_single_ticker(clean_ticker, start_date=start_date, end_date=end_date)
+        if not df.empty:
+            try:
+                cache_service.set_sync(cache_key, df.to_json(orient="split", date_format="iso"), ttl_seconds=self.history_ttl)
+            except Exception as e:
+                print(f"[MarketDataService] Error caching historical data: {e}")
+
+        return df
+
 market_data_service = MarketDataService()

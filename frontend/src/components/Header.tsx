@@ -1,10 +1,12 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { TrendingUp, RefreshCw, AlertTriangle, AlertCircle, ShieldCheck, Database, Radio, Sun, Moon } from 'lucide-react';
+import { TrendingUp, RefreshCw, AlertTriangle, AlertCircle, ShieldCheck, Database, Radio, Sun, Moon, Bell } from 'lucide-react';
 import { TickerBanner } from './TickerBanner';
 import { useMarketData } from '../context/MarketDataContext';
 import { useTheme } from '../context/ThemeContext';
+import { useAlerts } from '../context/AlertContext';
+import { AlertCenterModal } from './Alerts/AlertCenterModal';
 
 export function Header({
   activeTicker,
@@ -24,6 +26,12 @@ export function Header({
   } = useMarketData();
 
   const { isDark, toggleTheme } = useTheme();
+  const {
+    multiAlerts,
+    isAlertCenterOpen,
+    openAlertCenter,
+    closeAlertCenter
+  } = useAlerts();
   const [refreshing, setRefreshing] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
@@ -192,6 +200,43 @@ export function Header({
             >
               {isDark ? <Sun size={12} color="#F59E0B" /> : <Moon size={12} color="#8B5CF6" />}
               <span>{isDark ? 'Light' : 'Dark'}</span>
+            </button>
+
+            {/* Multi-Condition Alerts Button */}
+            <button
+              id="header-alerts-btn"
+              onClick={openAlertCenter}
+              title="Open Multi-Condition Alert Center"
+              style={{
+                background: multiAlerts.some(a => a.is_active) ? 'rgba(0, 242, 254, 0.12)' : 'rgba(255, 255, 255, 0.03)',
+                border: multiAlerts.some(a => a.is_active) ? '1px solid rgba(0, 242, 254, 0.4)' : '1px solid var(--border-subtle)',
+                color: multiAlerts.some(a => a.is_active) ? 'var(--accent-cyan)' : 'var(--text-muted)',
+                borderRadius: 20,
+                padding: '5px 12px',
+                fontSize: '0.72rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                fontWeight: 500,
+                transition: 'all 0.2s'
+              }}
+            >
+              <Bell size={12} />
+              <span>Alerts</span>
+              {multiAlerts.filter(a => a.is_active).length > 0 && (
+                <span style={{
+                  background: 'var(--accent-cyan)',
+                  color: '#080B11',
+                  borderRadius: 10,
+                  fontSize: '0.65rem',
+                  fontWeight: 700,
+                  padding: '1px 5px',
+                  lineHeight: 1
+                }}>
+                  {multiAlerts.filter(a => a.is_active).length}
+                </span>
+              )}
             </button>
 
             {/* Demo Sandbox Toggle */}
@@ -412,6 +457,13 @@ export function Header({
 
       {/* Live Market Ticker Banner */}
       <TickerBanner activeTicker={activeTicker} onSelectTicker={onSelectTicker} />
+
+      {/* Multi-Condition Alert Center Modal */}
+      <AlertCenterModal
+        isOpen={isAlertCenterOpen}
+        onClose={closeAlertCenter}
+        defaultTicker={activeTicker}
+      />
     </div>
   );
 }

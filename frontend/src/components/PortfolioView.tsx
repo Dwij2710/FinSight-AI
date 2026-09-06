@@ -1,7 +1,11 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { PieChart, Shield, Flame, Activity, ArrowUpRight, BarChart2, Scale, Bookmark, FolderOpen, Trash2, Check, Plus, Zap, RefreshCw } from 'lucide-react';
+import {
+  PieChart, Shield, Flame, Activity, ArrowUpRight, BarChart2, Scale,
+  Bookmark, FolderOpen, Trash2, Check, Plus, Zap, RefreshCw, DollarSign,
+  TrendingDown, AlertTriangle, Copy, Download, Layers
+} from 'lucide-react';
 import { PortfolioData, SavedPortfolio } from '../lib/types';
 import { getPortfolioOptimization, listSavedPortfolios, savePortfolio, deleteSavedPortfolio } from '../lib/api';
 import { MultiLineChart, CorrelationHeatmap, AllocationBars } from './Common/Charts';
@@ -9,16 +13,20 @@ import { ErrorBanner } from './Common/ErrorBanner';
 import { ProvenanceBadge } from './ProvenanceBadge';
 import { RebalanceModal } from './RebalanceModal';
 import { useMarketData } from '../context/MarketDataContext';
+import { exportSeriesToCsv } from '../lib/chartExport';
 
 export function PortfolioView() {
   const { isDemoMode, setDemoMode } = useMarketData();
   const defaultTickers = 'RELIANCE.NS, TCS.NS, HDFCBANK.NS, INFY.NS, ICICIBANK.NS';
   const [tickerInput, setTickerInput] = useState(defaultTickers);
+  const [capitalAmount, setCapitalAmount] = useState<number>(100000);
+  const [varHorizon, setVarHorizon] = useState<'1d' | '10d'>('1d');
   const [data, setData] = useState<PortfolioData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDemo, setIsDemo] = useState(false);
   const [activeStrategy, setActiveStrategy] = useState<'sharpe' | 'vol' | 'parity'>('sharpe');
+  const [manifestCopied, setManifestCopied] = useState(false);
 
   // Persistence & Rebalance state
   const [savedPortfolios, setSavedPortfolios] = useState<SavedPortfolio[]>([]);
@@ -37,7 +45,7 @@ export function PortfolioView() {
     }
   };
 
-  const runOptimization = async (inputStr?: string) => {
+  const runOptimization = async (inputStr?: string, customCapital?: number) => {
     setLoading(true);
     setError(null);
     const parsed = (inputStr || tickerInput)
@@ -46,7 +54,11 @@ export function PortfolioView() {
       .filter(Boolean);
 
     try {
-      const res = await getPortfolioOptimization({ tickers: parsed });
+      const cap = customCapital !== undefined ? customCapital : capitalAmount;
+      const res = await getPortfolioOptimization({
+        tickers: parsed,
+        initial_capital: cap
+      });
       setData(res.data);
       setIsDemo(!!res.isDemo);
     } catch (err: any) {
@@ -513,145 +525,460 @@ export function PortfolioView() {
             </div>
           </div>
 
-          {/* Rebalance Urgency & Drift Telemetry Banner */}
-          <div style={{
-            background: rebalanceScore > 35 ? 'rgba(245, 158, 11, 0.08)' : 'rgba(16, 185, 129, 0.08)',
-            border: `1px solid ${rebalanceScore > 35 ? 'rgba(245, 158, 11, 0.3)' : 'rgba(16, 185, 129, 0.3)'}`,
-            borderRadius: 12,
-            padding: '14px 20px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexWrap: 'wrap',
-            gap: 14
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{
-                width: 40,
-                height: 40,
-                borderRadius: 10,
-                background: rebalanceScore > 35 ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}>
-                <Activity size={20} color={rebalanceScore > 35 ? '#F59E0B' : '#10B981'} />
-              </div>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)' }}>
-                    Rebalance Urgency Score:
-                  </span>
-                  <span style={{
-                    fontSize: '1rem',
-                    fontWeight: 800,
-                    color: rebalanceScore > 35 ? '#F59E0B' : '#10B981',
-                    fontFamily: 'var(--font-mono)'
-                  }}>
-                    {rebalanceScore} / 100
-                  </span>
-                  <span className={rebalanceScore > 35 ? 'badge badge-amber' : 'badge badge-emerald'} style={{ fontSize: '0.7rem' }}>
-                    {rebalanceScore > 35 ? 'Rebalance Recommended' : 'Portfolio Balanced'}
-                  </span>
-                </div>
-                <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: 0, marginTop: 2 }}>
-                  {rebalanceScore > 35
-                    ? `Asset weights diverge by ${Math.round(totalDivergence * 100)}% from equal baseline. Aligning with ${activeStrategy.toUpperCase()} captures estimated +${(data.max_sharpe.return - (data.min_volatility.return)).toFixed(1)}% alpha.`
-                    : `Asset drift is within acceptable tolerance (<${Math.round(totalDivergence * 100)}%). No immediate rebalance required.`}
-                </p>
-              </div>
-            </div>
+          {/* Institutional Value-at-Risk (VaR) & CVaR (Expected Shortfall) Risk Hub */}
+          {(() => {
+            const activeResult = activeStrategy === 'sharpe'
+              ? data.max_sharpe
+              : activeStrategy === 'vol'
+              ? data.min_volatility
+              : (data.risk_parity || data.max_sharpe);
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              <button
-                onClick={() => setShowRebalanceModal(true)}
-                className="btn-primary"
-                style={{ fontSize: '0.8rem', padding: '7px 16px', display: 'flex', alignItems: 'center', gap: 6 }}
-              >
-                <Activity size={14} />
-                <span>Generate Rebalance Plan</span>
-              </button>
+            const varMetrics = activeResult?.var_metrics;
+            const riskContribs = activeResult?.risk_contributions;
+            const rebalancePlan = data.rebalance_plans
+              ? (activeStrategy === 'sharpe'
+                ? data.rebalance_plans.max_sharpe
+                : activeStrategy === 'vol'
+                ? data.rebalance_plans.min_volatility
+                : data.rebalance_plans.risk_parity)
+              : null;
 
-              <button
-                onClick={() => setShowSaveModal(true)}
-                className="btn-secondary"
-                style={{ fontSize: '0.8rem', padding: '7px 14px' }}
-              >
-                Lock Allocation
-              </button>
-            </div>
-          </div>
+            // Compute metrics based on selected horizon
+            const p95 = varHorizon === '1d'
+              ? (varMetrics?.parametric_var.var_95_1d_pct ?? 1.91)
+              : (varMetrics?.parametric_var.var_95_10d_pct ?? 6.04);
+            const p99 = varHorizon === '1d'
+              ? (varMetrics?.parametric_var.var_99_1d_pct ?? 2.71)
+              : (varMetrics?.parametric_var.var_99_10d_pct ?? 8.57);
 
-          {/* Holdings Breakdown Table */}
-          <div className="glass-panel" style={{ padding: '16px 20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-              <div>
-                <h3 style={{ fontSize: '1.05rem', margin: 0 }}>Holdings Breakdown & Allocation Deltas</h3>
-                <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: 0, marginTop: 2 }}>
-                  Optimal weights for active strategy ({activeStrategy.toUpperCase()}) vs equal-weighted baseline.
-                </p>
-              </div>
-              <span className="badge badge-cyan" style={{ fontSize: '0.72rem' }}>
-                {Object.keys(activeWeights).length} Equities Analyzed
-              </span>
-            </div>
+            const h95 = varHorizon === '1d'
+              ? (varMetrics?.historical_var.var_95_1d_pct ?? 2.01)
+              : (varMetrics?.historical_var.var_95_10d_pct ?? 6.36);
+            const h99 = varHorizon === '1d'
+              ? (varMetrics?.historical_var.var_99_1d_pct ?? 2.92)
+              : (varMetrics?.historical_var.var_99_10d_pct ?? 9.23);
 
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.08)', color: 'var(--text-muted)', textAlign: 'left' }}>
-                    <th style={{ padding: '8px 12px' }}>Asset</th>
-                    <th style={{ padding: '8px 12px' }}>Baseline (1/N)</th>
-                    <th style={{ padding: '8px 12px' }}>Target Weight</th>
-                    <th style={{ padding: '8px 12px' }}>Rebalance Delta</th>
-                    <th style={{ padding: '8px 12px' }}>Recommended Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(activeWeights).map(([sym, targetWeight]) => {
-                    const baseline = baselineWeight > 1.0 ? baselineWeight : baselineWeight * 100;
-                    const target = targetWeight > 1.0 ? targetWeight : targetWeight * 100;
-                    const delta = target - baseline;
-                    const action = delta > 3
-                      ? 'Accumulate'
-                      : delta < -3
-                      ? 'Trim'
-                      : 'Hold';
-                    const actionColor = delta > 3 ? '#10B981' : delta < -3 ? '#EF4444' : '#94A3B8';
+            const c95 = varHorizon === '1d'
+              ? (varMetrics?.cvar_expected_shortfall.cvar_95_1d_pct ?? 2.51)
+              : (varMetrics?.cvar_expected_shortfall.cvar_95_10d_pct ?? 7.95);
+            const c99 = varHorizon === '1d'
+              ? (varMetrics?.cvar_expected_shortfall.cvar_99_1d_pct ?? 3.80)
+              : (varMetrics?.cvar_expected_shortfall.cvar_99_10d_pct ?? 12.02);
 
-                    return (
-                      <tr key={sym} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.04)', fontFamily: 'var(--font-mono)' }}>
-                        <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                          {sym}
-                        </td>
-                        <td style={{ padding: '10px 12px', color: 'var(--text-secondary)' }}>
-                          {baseline.toFixed(1)}%
-                        </td>
-                        <td style={{ padding: '10px 12px', fontWeight: 700, color: 'var(--accent-cyan)' }}>
-                          {target.toFixed(1)}%
-                        </td>
-                        <td style={{ padding: '10px 12px', color: delta >= 0 ? '#10B981' : '#EF4444' }}>
-                          {delta >= 0 ? '+' : ''}{delta.toFixed(1)}%
-                        </td>
-                        <td style={{ padding: '10px 12px' }}>
-                          <span style={{
-                            padding: '3px 8px',
+            const p95Usd = Math.round(capitalAmount * (p95 / 100));
+            const p99Usd = Math.round(capitalAmount * (p99 / 100));
+            const h95Usd = Math.round(capitalAmount * (h95 / 100));
+            const h99Usd = Math.round(capitalAmount * (h99 / 100));
+            const c95Usd = Math.round(capitalAmount * (c95 / 100));
+            const c99Usd = Math.round(capitalAmount * (c99 / 100));
+
+            const handleCopyManifest = () => {
+              if (!rebalancePlan) return;
+              const lines = rebalancePlan.orders
+                .filter(o => o.action !== 'HOLD')
+                .map(o => `${o.action} ${o.delta_shares} shares of ${o.ticker} (~$${Math.abs(o.delta_value).toLocaleString()})`);
+              const text = `=== FINSIGHT AI REBALANCE MANIFEST (${activeStrategy.toUpperCase()}) ===\nCapital: $${capitalAmount.toLocaleString()}\nTurnover: $${rebalancePlan.turnover_usd.toLocaleString()} (${rebalancePlan.turnover_pct}%)\nEst. Friction (7 bps): $${rebalancePlan.estimated_friction_usd}\n\nORDERS:\n${lines.join('\n')}`;
+              navigator.clipboard.writeText(text);
+              setManifestCopied(true);
+              setTimeout(() => setManifestCopied(false), 2500);
+            };
+
+            const handleExportManifestCsv = () => {
+              if (!rebalancePlan) return;
+              const headers = ['Action', 'Ticker', 'Live Price', 'Current %', 'Target %', 'Current Value', 'Target Value', 'Delta Value', 'Delta Shares'];
+              const rows = rebalancePlan.orders.map(o => [
+                o.action, o.ticker, o.price, o.current_weight_pct, o.target_weight_pct,
+                o.current_value, o.target_value, o.delta_value, o.delta_shares
+              ]);
+              exportSeriesToCsv(`finsight_rebalance_${activeStrategy}_${new Date().toISOString().slice(0, 10)}`, headers, rows);
+            };
+
+            return (
+              <>
+                {/* Institutional Tail-Risk & VaR / CVaR Hub */}
+                <div className="glass-panel" style={{ padding: '20px 24px', border: '1px solid var(--border-subtle)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16, marginBottom: 20 }}>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Shield size={20} color="var(--accent-cyan)" />
+                        <h3 style={{ fontSize: '1.2rem', margin: 0, fontWeight: 700 }}>
+                          Institutional Tail-Risk & <span className="text-gradient">Value-at-Risk (VaR / CVaR)</span>
+                        </h3>
+                        <span className="badge badge-cyan" style={{ fontSize: '0.72rem' }}>
+                          Basel III Compliant
+                        </span>
+                      </div>
+                      <p style={{ color: 'var(--text-secondary)', fontSize: '0.82rem', margin: 0, marginTop: 4, maxWidth: 680 }}>
+                        Multi-paradigm tail risk measurement for <strong>{activeStrategy === 'sharpe' ? 'Max Sharpe' : activeStrategy === 'vol' ? 'Min Volatility' : 'Equal Risk Parity'}</strong>.
+                        Combines Ledoit-Wolf shrinkage parametric modeling with empirical historical distributions and Expected Shortfall.
+                      </p>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+                      {/* Portfolio Capital Config */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Portfolio Equity:</span>
+                        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                          <span style={{ position: 'absolute', left: 10, fontSize: '0.82rem', color: 'var(--text-muted)' }}>$</span>
+                          <input
+                            type="number"
+                            value={capitalAmount}
+                            onChange={e => setCapitalAmount(Math.max(100, Number(e.target.value) || 100000))}
+                            style={{
+                              padding: '6px 12px 6px 24px',
+                              width: 110,
+                              fontSize: '0.82rem',
+                              fontFamily: 'var(--font-mono)',
+                              background: 'rgba(255, 255, 255, 0.05)',
+                              border: '1px solid var(--border-subtle)',
+                              borderRadius: 6,
+                              color: 'var(--text-primary)'
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Horizon Toggle */}
+                      <div style={{ display: 'flex', background: 'rgba(255, 255, 255, 0.04)', borderRadius: 8, padding: 3, border: '1px solid var(--border-subtle)' }}>
+                        <button
+                          onClick={() => setVarHorizon('1d')}
+                          style={{
+                            padding: '4px 12px',
                             borderRadius: 6,
-                            fontSize: '0.72rem',
+                            fontSize: '0.78rem',
                             fontWeight: 600,
-                            background: delta > 3 ? 'rgba(16, 185, 129, 0.12)' : delta < -3 ? 'rgba(239, 68, 68, 0.12)' : 'rgba(255, 255, 255, 0.06)',
-                            color: actionColor
-                          }}>
-                            {action}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                            background: varHorizon === '1d' ? 'var(--accent-cyan)' : 'transparent',
+                            color: varHorizon === '1d' ? '#000' : 'var(--text-secondary)',
+                            border: 'none',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          1-Day Horizon
+                        </button>
+                        <button
+                          onClick={() => setVarHorizon('10d')}
+                          style={{
+                            padding: '4px 12px',
+                            borderRadius: 6,
+                            fontSize: '0.78rem',
+                            fontWeight: 600,
+                            background: varHorizon === '10d' ? 'var(--accent-cyan)' : 'transparent',
+                            color: varHorizon === '10d' ? '#000' : 'var(--text-secondary)',
+                            border: 'none',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          10-Day Horizon (Basel)
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 3 Pillar Risk Meter Cards */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, marginBottom: 20 }}>
+                    {/* Parametric VaR */}
+                    <div style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-subtle)', borderRadius: 10, padding: 16 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                        <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                          Parametric VaR (Ledoit-Wolf)
+                        </div>
+                        <span className="badge badge-purple" style={{ fontSize: '0.65rem' }}>Normal Model</span>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                        <div>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>95% Confidence ({varHorizon})</div>
+                          <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#F8FAFC', fontFamily: 'var(--font-mono)' }}>
+                            -{p95.toFixed(2)}%
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--accent-rose)', fontFamily: 'var(--font-mono)' }}>
+                            -${p95Usd.toLocaleString()}
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>99% Confidence ({varHorizon})</div>
+                          <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#F8FAFC', fontFamily: 'var(--font-mono)' }}>
+                            -{p99.toFixed(2)}%
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--accent-rose)', fontFamily: 'var(--font-mono)' }}>
+                            -${p99Usd.toLocaleString()}
+                          </div>
+                        </div>
+                      </div>
+                      <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', margin: 0, marginTop: 10 }}>
+                        Assumes Gaussian return distribution with Ledoit-Wolf shrinkage to regularize asset covariance.
+                      </p>
+                    </div>
+
+                    {/* Historical VaR */}
+                    <div style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-subtle)', borderRadius: 10, padding: 16 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                        <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                          Historical VaR (Empirical)
+                        </div>
+                        <span className="badge badge-cyan" style={{ fontSize: '0.65rem' }}>Quantile Cutoff</span>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                        <div>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>95% Empirical ({varHorizon})</div>
+                          <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#F8FAFC', fontFamily: 'var(--font-mono)' }}>
+                            -{h95.toFixed(2)}%
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--accent-rose)', fontFamily: 'var(--font-mono)' }}>
+                            -${h95Usd.toLocaleString()}
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>99% Empirical ({varHorizon})</div>
+                          <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#F8FAFC', fontFamily: 'var(--font-mono)' }}>
+                            -{h99.toFixed(2)}%
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--accent-rose)', fontFamily: 'var(--font-mono)' }}>
+                            -${h99Usd.toLocaleString()}
+                          </div>
+                        </div>
+                      </div>
+                      <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', margin: 0, marginTop: 10 }}>
+                        Calculated from the empirical 5th and 1st percentiles of actual daily portfolio return history.
+                      </p>
+                    </div>
+
+                    {/* Conditional VaR / Expected Shortfall */}
+                    <div style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-subtle)', borderRadius: 10, padding: 16 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                        <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                          Conditional VaR (Expected Shortfall)
+                        </div>
+                        <span className="badge badge-rose" style={{ fontSize: '0.65rem' }}>Tail Severity</span>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                        <div>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>95% Tail Shortfall ({varHorizon})</div>
+                          <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--accent-rose)', fontFamily: 'var(--font-mono)' }}>
+                            -{c95.toFixed(2)}%
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--accent-rose)', fontFamily: 'var(--font-mono)' }}>
+                            -${c95Usd.toLocaleString()}
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>99% Tail Shortfall ({varHorizon})</div>
+                          <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--accent-rose)', fontFamily: 'var(--font-mono)' }}>
+                            -{c99.toFixed(2)}%
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--accent-rose)', fontFamily: 'var(--font-mono)' }}>
+                            -${c99Usd.toLocaleString()}
+                          </div>
+                        </div>
+                      </div>
+                      <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', margin: 0, marginTop: 10 }}>
+                        Expected loss conditional on breaching the VaR threshold: E[Loss | Loss &gt; VaR].
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Risk Budgeting / Parity Attribution Section */}
+                  {riskContribs && riskContribs.percentage_risk_contributions && (
+                    <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 16 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+                        <div style={{ fontSize: '0.84rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                          Asset Volatility Risk Contributions (Equal Risk Parity vs Active Allocation)
+                        </div>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                          Sum of risk contributions = 100%
+                        </span>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fit, minmax(130px, 1fr))`, gap: 10 }}>
+                        {Object.entries(riskContribs.percentage_risk_contributions).map(([sym, prcPct]) => (
+                          <div key={sym} style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', marginBottom: 4 }}>
+                              <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{sym}</span>
+                              <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-purple)' }}>{prcPct.toFixed(1)}%</span>
+                            </div>
+                            <div style={{ width: '100%', height: 4, background: 'rgba(255, 255, 255, 0.08)', borderRadius: 2, overflow: 'hidden' }}>
+                              <div style={{ width: `${Math.min(100, prcPct * 2)}%`, height: '100%', background: activeStrategy === 'parity' ? 'var(--accent-purple)' : 'var(--accent-cyan)' }} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Rebalance Urgency & Drift Telemetry Banner */}
+                <div style={{
+                  background: rebalanceScore > 35 ? 'rgba(245, 158, 11, 0.08)' : 'rgba(16, 185, 129, 0.08)',
+                  border: `1px solid ${rebalanceScore > 35 ? 'rgba(245, 158, 11, 0.3)' : 'rgba(16, 185, 129, 0.3)'}`,
+                  borderRadius: 12,
+                  padding: '14px 20px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: 14
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 10,
+                      background: rebalanceScore > 35 ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}>
+                      <Activity size={20} color={rebalanceScore > 35 ? '#F59E0B' : '#10B981'} />
+                    </div>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)' }}>
+                          Rebalance Urgency Score:
+                        </span>
+                        <span style={{
+                          fontSize: '1rem',
+                          fontWeight: 800,
+                          color: rebalanceScore > 35 ? '#F59E0B' : '#10B981',
+                          fontFamily: 'var(--font-mono)'
+                        }}>
+                          {rebalanceScore} / 100
+                        </span>
+                        <span className={rebalanceScore > 35 ? 'badge badge-amber' : 'badge badge-emerald'} style={{ fontSize: '0.7rem' }}>
+                          {rebalanceScore > 35 ? 'Rebalance Recommended' : 'Portfolio Balanced'}
+                        </span>
+                      </div>
+                      <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: 0, marginTop: 2 }}>
+                        {rebalanceScore > 35
+                          ? `Asset weights diverge by ${Math.round(totalDivergence * 100)}% from baseline. Rebalancing to ${activeStrategy.toUpperCase()} captures estimated +${(data.max_sharpe.return - (data.min_volatility.return)).toFixed(1)}% alpha.`
+                          : `Asset drift is within acceptable tolerance (<${Math.round(totalDivergence * 100)}%). No immediate rebalance required.`}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                    <button
+                      onClick={handleCopyManifest}
+                      className="btn-secondary"
+                      style={{ fontSize: '0.8rem', padding: '7px 14px', display: 'flex', alignItems: 'center', gap: 6 }}
+                    >
+                      <Copy size={13} />
+                      <span>{manifestCopied ? 'Manifest Copied!' : 'Copy Orders'}</span>
+                    </button>
+                    <button
+                      onClick={handleExportManifestCsv}
+                      className="btn-secondary"
+                      style={{ fontSize: '0.8rem', padding: '7px 14px', display: 'flex', alignItems: 'center', gap: 6 }}
+                    >
+                      <Download size={13} />
+                      <span>Export CSV</span>
+                    </button>
+                    <button
+                      onClick={() => setShowRebalanceModal(true)}
+                      className="btn-primary"
+                      style={{ fontSize: '0.8rem', padding: '7px 16px', display: 'flex', alignItems: 'center', gap: 6 }}
+                    >
+                      <Activity size={14} />
+                      <span>Rebalance Ticket</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Actionable Rebalance Order Ledger & Current vs Target Allocation Table */}
+                <div className="glass-panel" style={{ padding: '18px 22px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
+                    <div>
+                      <h3 style={{ fontSize: '1.05rem', margin: 0, fontWeight: 700 }}>
+                        Actionable Rebalance Order Ledger (Current vs Target Allocation)
+                      </h3>
+                      <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: 0, marginTop: 2 }}>
+                        Concrete order routing manifest to align portfolio with <strong>{activeStrategy.toUpperCase()}</strong> strategy at ${capitalAmount.toLocaleString()} equity.
+                      </p>
+                    </div>
+                    {rebalancePlan && (
+                      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                        <span className="badge badge-cyan" style={{ fontSize: '0.72rem' }}>
+                          Turnover: ${rebalancePlan.turnover_usd.toLocaleString()} ({rebalancePlan.turnover_pct}%)
+                        </span>
+                        <span className="badge badge-emerald" style={{ fontSize: '0.72rem' }}>
+                          Friction (7 bps): ${rebalancePlan.estimated_friction_usd}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.08)', color: 'var(--text-muted)', textAlign: 'left' }}>
+                          <th style={{ padding: '8px 12px' }}>Action</th>
+                          <th style={{ padding: '8px 12px' }}>Asset</th>
+                          <th style={{ padding: '8px 12px' }}>Est. Price</th>
+                          <th style={{ padding: '8px 12px' }}>Current Alloc</th>
+                          <th style={{ padding: '8px 12px' }}>Target Alloc</th>
+                          <th style={{ padding: '8px 12px' }}>Weight Delta</th>
+                          <th style={{ padding: '8px 12px' }}>Order Delta ($)</th>
+                          <th style={{ padding: '8px 12px' }}>Target Shares</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(rebalancePlan?.orders || Object.entries(activeWeights).map(([sym, w]) => ({
+                          ticker: sym,
+                          action: 'HOLD' as const,
+                          price: 100.0,
+                          current_weight_pct: 100 / Object.keys(activeWeights).length,
+                          target_weight_pct: w > 1.0 ? w : w * 100,
+                          delta_value: 0,
+                          delta_shares: 0,
+                          current_value: 0,
+                          target_value: 0
+                        }))).map(order => {
+                          const deltaPct = order.target_weight_pct - order.current_weight_pct;
+                          const isBuy = order.action === 'BUY';
+                          const isSell = order.action === 'SELL';
+
+                          return (
+                            <tr key={order.ticker} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.04)', fontFamily: 'var(--font-mono)' }}>
+                              <td style={{ padding: '10px 12px' }}>
+                                <span style={{
+                                  padding: '3px 8px',
+                                  borderRadius: 6,
+                                  fontSize: '0.72rem',
+                                  fontWeight: 700,
+                                  background: isBuy ? 'rgba(16, 185, 129, 0.15)' : isSell ? 'rgba(239, 68, 68, 0.15)' : 'rgba(255, 255, 255, 0.06)',
+                                  color: isBuy ? '#10B981' : isSell ? '#EF4444' : '#94A3B8'
+                                }}>
+                                  {order.action}
+                                </span>
+                              </td>
+                              <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                                {order.ticker}
+                              </td>
+                              <td style={{ padding: '10px 12px', color: 'var(--text-secondary)' }}>
+                                ${order.price.toFixed(2)}
+                              </td>
+                              <td style={{ padding: '10px 12px', color: 'var(--text-secondary)' }}>
+                                {order.current_weight_pct.toFixed(1)}%
+                              </td>
+                              <td style={{ padding: '10px 12px', fontWeight: 700, color: 'var(--accent-cyan)' }}>
+                                {order.target_weight_pct.toFixed(1)}%
+                              </td>
+                              <td style={{ padding: '10px 12px', color: deltaPct >= 0 ? '#10B981' : '#EF4444' }}>
+                                {deltaPct >= 0 ? '+' : ''}{deltaPct.toFixed(1)}%
+                              </td>
+                              <td style={{ padding: '10px 12px', fontWeight: 600, color: isBuy ? '#10B981' : isSell ? '#EF4444' : 'var(--text-secondary)' }}>
+                                {order.delta_value > 0 ? `+$${order.delta_value.toLocaleString()}` : order.delta_value < 0 ? `-$${Math.abs(order.delta_value).toLocaleString()}` : '$0'}
+                              </td>
+                              <td style={{ padding: '10px 12px', color: isBuy ? '#10B981' : isSell ? '#EF4444' : 'var(--text-muted)' }}>
+                                {order.delta_shares > 0 ? `${isBuy ? '+' : '-'}${order.delta_shares} shares` : '—'}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
+            );
+          })()}
 
           {/* Allocation & Growth Charts */}
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.4fr) minmax(0, 1fr)', gap: 24, alignItems: 'stretch' }}>

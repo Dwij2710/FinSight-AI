@@ -124,16 +124,31 @@ async def generate_forecast(req: ForecastRequest):
 
             pred_res = fitted_model.get_prediction(start=len(series), end=len(series) + forecast_steps - 1)
             pred_mean = pred_res.predicted_mean
-            conf_int = pred_res.conf_int()
+            conf_int_95 = pred_res.conf_int(alpha=0.05)
+            conf_int_80 = pred_res.conf_int(alpha=0.20)
 
             for i, (f_date, val) in enumerate(zip(future_dates, pred_mean)):
-                lower = float(conf_int.iloc[i, 0]) if not conf_int.empty else float(val * 0.95)
-                upper = float(conf_int.iloc[i, 1]) if not conf_int.empty else float(val * 1.05)
+                p_val = float(val)
+                l95 = float(conf_int_95.iloc[i, 0]) if not conf_int_95.empty else float(p_val * 0.90)
+                u95 = float(conf_int_95.iloc[i, 1]) if not conf_int_95.empty else float(p_val * 1.10)
+                l80 = float(conf_int_80.iloc[i, 0]) if not conf_int_80.empty else float(p_val * 0.95)
+                u80 = float(conf_int_80.iloc[i, 1]) if not conf_int_80.empty else float(p_val * 1.05)
+
+                # Strict monotonic ordering enforcement: lower_95 <= lower_80 <= predicted <= upper_80 <= upper_95
+                l80 = max(l95, min(l80, p_val))
+                u80 = min(u95, max(u80, p_val))
+                l95 = min(l95, l80)
+                u95 = max(u95, u80)
+
                 predictions_list.append({
                     "date": f_date.strftime('%Y-%m-%d'),
-                    "predicted_mean": round(float(val), 2),
-                    "lower_bound": round(lower, 2),
-                    "upper_bound": round(upper, 2)
+                    "predicted_mean": round(p_val, 2),
+                    "lower_80": round(l80, 2),
+                    "upper_80": round(u80, 2),
+                    "lower_95": round(l95, 2),
+                    "upper_95": round(u95, 2),
+                    "lower_bound": round(l95, 2),  # Backward compatibility for legacy frontend
+                    "upper_bound": round(u95, 2)   # Backward compatibility for legacy frontend
                 })
 
             fitted_vals = fitted_model.fittedvalues
@@ -146,10 +161,59 @@ async def generate_forecast(req: ForecastRequest):
         except HTTPException:
             raise
         except Exception as err:
-            raise HTTPException(
-                status_code=422,
-                detail=f"SARIMAX optimization did not converge with order ({req.p},{req.d},{req.q}) and seasonal ({req.sp},{req.sd},{req.sq},{req.seasonal_period}): {str(err)}. Please adjust differencing (d=1) or seasonal period."
-            )
+            if seasonal_order != (0, 0, 0, 0):
+                # High-availability fallback: Attempt non-seasonal ARIMA if seasonal Kalman filter exhausts memory/diverges
+                try:
+                    seasonal_order = (0, 0, 0, 0)
+                    model = sm.tsa.statespace.SARIMAX(
+                        series,
+                        order=order,
+                        seasonal_order=(0, 0, 0, 0),
+                        enforce_stationarity=False,
+                        enforce_invertibility=False
+                    )
+                    fitted_model = model.fit(disp=False, maxiter=150)
+                    pred_res = fitted_model.get_prediction(start=len(series), end=len(series) + forecast_steps - 1)
+                    pred_mean = pred_res.predicted_mean
+                    conf_int_95 = pred_res.conf_int(alpha=0.05)
+                    conf_int_80 = pred_res.conf_int(alpha=0.20)
+                    predictions_list = []
+                    for i, (f_date, val) in enumerate(zip(future_dates, pred_mean)):
+                        p_val = float(val)
+                        l95 = float(conf_int_95.iloc[i, 0]) if not conf_int_95.empty else float(p_val * 0.90)
+                        u95 = float(conf_int_95.iloc[i, 1]) if not conf_int_95.empty else float(p_val * 1.10)
+                        l80 = float(conf_int_80.iloc[i, 0]) if not conf_int_80.empty else float(p_val * 0.95)
+                        u80 = float(conf_int_80.iloc[i, 1]) if not conf_int_80.empty else float(p_val * 1.05)
+                        l80 = max(l95, min(l80, p_val))
+                        u80 = min(u95, max(u80, p_val))
+                        l95 = min(l95, l80)
+                        u95 = max(u95, u80)
+                        predictions_list.append({
+                            "date": f_date.strftime('%Y-%m-%d'),
+                            "predicted_mean": round(p_val, 2),
+                            "lower_80": round(l80, 2),
+                            "upper_80": round(u80, 2),
+                            "lower_95": round(l95, 2),
+                            "upper_95": round(u95, 2),
+                            "lower_bound": round(l95, 2),
+                            "upper_bound": round(u95, 2)
+                        })
+                    fitted_vals = fitted_model.fittedvalues
+                    rmse = float(np.sqrt(mean_squared_error(series, fitted_vals)))
+                    with np.errstate(divide='ignore', invalid='ignore'):
+                        mape_vals = np.abs((series - fitted_vals) / series)
+                        mape = float(np.nanmean(mape_vals) * 100)
+                    accuracy = max(0.0, min(100.0, 100.0 - mape))
+                except Exception as fallback_err:
+                    raise HTTPException(
+                        status_code=422,
+                        detail=f"SARIMAX optimization did not converge with order ({req.p},{req.d},{req.q}) and seasonal ({req.sp},{req.sd},{req.sq},{req.seasonal_period}): {str(err)}. Fallback failed: {str(fallback_err)}"
+                    )
+            else:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"SARIMAX optimization did not converge with order ({req.p},{req.d},{req.q}): {str(err)}. Please adjust differencing (d=1)."
+                )
 
         # 5. Out-of-sample holdout backtest (if requested and sufficient data)
         backtest_data = None
@@ -170,22 +234,36 @@ async def generate_forecast(req: ForecastRequest):
                 bt_fitted = bt_model.fit(disp=False, maxiter=200)
                 bt_preds = bt_fitted.get_prediction(start=len(train_series), end=len(train_series) + holdout_len - 1).predicted_mean
                 
+                from sklearn.metrics import mean_absolute_error
                 bt_rmse = float(np.sqrt(mean_squared_error(test_series, bt_preds)))
+                bt_mae = float(mean_absolute_error(test_series, bt_preds))
                 with np.errstate(divide='ignore', invalid='ignore'):
                     bt_mape_vals = np.abs((test_series - bt_preds) / test_series)
                     bt_mape = float(np.nanmean(bt_mape_vals) * 100)
                 bt_acc = max(0.0, min(100.0, 100.0 - bt_mape))
 
+                # Directional accuracy (identifying market swing sign correctly)
+                test_diff = np.diff(test_series.values)
+                pred_diff = np.diff(bt_preds.values)
+                dir_acc = float(np.mean((test_diff * pred_diff) > 0) * 100) if len(test_diff) > 0 else 50.0
+
                 backtest_data = {
+                    "evaluation_type": "out_of_sample_holdout",
+                    "holdout_steps": holdout_len,
                     "dates": test_dates,
                     "actual": [round(float(v), 2) for v in test_series],
                     "predicted": [round(float(v), 2) for v in bt_preds],
                     "rmse": round(bt_rmse, 2),
+                    "mae": round(bt_mae, 2),
                     "mape": round(bt_mape, 2),
+                    "directional_accuracy_pct": round(dir_acc, 1),
                     "accuracy": round(bt_acc, 2)
                 }
             except Exception as e:
-                backtest_data = {"error": f"Backtest fitting failed: {str(e)}"}
+                backtest_data = {
+                    "evaluation_type": "out_of_sample_holdout",
+                    "error": f"Backtest fitting failed: {str(e)}"
+                }
 
         # Format history data
         history_points = []
@@ -197,6 +275,19 @@ async def generate_forecast(req: ForecastRequest):
             })
 
         now_ts = datetime.datetime.utcnow().isoformat() + "Z"
+        aic_val = round(float(fitted_model.aic), 2) if hasattr(fitted_model, 'aic') else None
+        bic_val = round(float(fitted_model.bic), 2) if hasattr(fitted_model, 'bic') else None
+        llf_val = round(float(fitted_model.llf), 2) if hasattr(fitted_model, 'llf') else None
+
+        in_sample_metrics = {
+            "aic": aic_val,
+            "bic": bic_val,
+            "log_likelihood": llf_val,
+            "rmse": round(rmse, 2),
+            "mape": round(mape, 2),
+            "fit_score": round(accuracy, 2)
+        }
+
         return ApiResponse(
             success=True,
             data_source="live",
@@ -206,10 +297,17 @@ async def generate_forecast(req: ForecastRequest):
                 "column": col,
                 "data_source": "live",
                 "fetched_at": now_ts,
+                "in_sample_fit": in_sample_metrics,
+                "out_of_sample_validation": backtest_data,
                 "metrics": {
+                    # Backward compatibility fields
+                    "aic": aic_val,
+                    "bic": bic_val,
                     "rmse": round(rmse, 2),
                     "mape": round(mape, 2),
-                    "accuracy": round(accuracy, 2)
+                    "accuracy": round(accuracy, 2),
+                    "in_sample": in_sample_metrics,
+                    "out_of_sample": backtest_data if backtest_data and "error" not in backtest_data else None
                 },
                 "adf_test": adf_result,
                 "history": history_points,

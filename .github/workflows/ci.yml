@@ -28,9 +28,9 @@ jobs:
           pip install -r requirements.txt
           pip install pytest
 
-      - name: Run Quant Math & Telemetry Tests
+      - name: Run Quant Math, Security & Strategy Pytest Suite
         run: |
-          python -m unittest discover tests -v
+          pytest -v
 
   frontend-build:
     name: Frontend Build & Typecheck
@@ -50,6 +50,10 @@ jobs:
       - name: Install Frontend Dependencies
         working-directory: frontend
         run: npm ci || npm install
+
+      - name: Strict Typecheck
+        working-directory: frontend
+        run: npx tsc --noEmit
 
       - name: Verify Build
         working-directory: frontend
