@@ -8,6 +8,13 @@ from httpx import AsyncClient, ASGITransport
 
 from src.paper_broker import PaperBroker
 from backend.app.main import app
+from backend.app.db.database import init_db
+
+
+@pytest.fixture(autouse=True)
+async def setup_test_db():
+    """Ensure database schema is initialized before running paper trading integration tests."""
+    await init_db()
 
 
 def test_broker_buy_and_sell_math():

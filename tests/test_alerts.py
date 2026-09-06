@@ -12,7 +12,14 @@ from httpx import AsyncClient, ASGITransport
 from datetime import datetime
 
 from backend.app.main import app
+from backend.app.db.database import init_db
 from src.alert_monitor import evaluate_alert_condition, VALID_CONDITION_TYPES
+
+
+@pytest.fixture(autouse=True)
+async def setup_test_db():
+    """Ensure database schema is initialized before running alert integration tests."""
+    await init_db()
 
 
 def test_alert_monitor_all_conditions():

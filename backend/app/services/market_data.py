@@ -11,6 +11,7 @@ Guarantees:
 import time
 import datetime
 import pytz
+import io
 import pandas as pd
 from typing import Dict, List, Optional, Any, Tuple
 import yfinance as yf
@@ -268,7 +269,7 @@ class MarketDataService:
         cached_json = cache_service.get_sync(cache_key)
         if cached_json:
             try:
-                df = pd.read_json(cached_json, orient="split")
+                df = pd.read_json(io.StringIO(cached_json) if isinstance(cached_json, str) else cached_json, orient="split")
                 return df
             except Exception:
                 pass
