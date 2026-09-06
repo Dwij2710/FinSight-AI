@@ -28,6 +28,8 @@ export interface BackendHealthStatus {
   last_data_fetch_ts?: string | null;
   yfinance_reachable?: boolean;
   latencyMs?: number;
+  httpStatus?: number;
+  errorMessage?: string;
 }
 
 export interface ForecastPoint {

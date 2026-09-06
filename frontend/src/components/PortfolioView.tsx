@@ -8,8 +8,10 @@ import { MultiLineChart, CorrelationHeatmap, AllocationBars } from './Common/Cha
 import { ErrorBanner } from './Common/ErrorBanner';
 import { ProvenanceBadge } from './ProvenanceBadge';
 import { RebalanceModal } from './RebalanceModal';
+import { useMarketData } from '../context/MarketDataContext';
 
 export function PortfolioView() {
+  const { isDemoMode, setDemoMode } = useMarketData();
   const defaultTickers = 'RELIANCE.NS, TCS.NS, HDFCBANK.NS, INFY.NS, ICICIBANK.NS';
   const [tickerInput, setTickerInput] = useState(defaultTickers);
   const [data, setData] = useState<PortfolioData | null>(null);
@@ -58,7 +60,7 @@ export function PortfolioView() {
   useEffect(() => {
     runOptimization();
     fetchSavedPortfolios();
-  }, []);
+  }, [isDemoMode]);
 
   const setPreset = (preset: string) => {
     setTickerInput(preset);
@@ -171,11 +173,13 @@ export function PortfolioView() {
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           {/* Provenance Badge */}
-          <ProvenanceBadge
-            source={data?.data_source}
-            fetchedAt={data?.fetched_at}
-            isDemo={isDemo}
-          />
+          {(data || isDemo) && (
+            <ProvenanceBadge
+              source={data?.data_source}
+              fetchedAt={data?.fetched_at}
+              isDemo={isDemo}
+            />
+          )}
 
           {/* Presets */}
           <div style={{ display: 'flex', gap: 8 }}>
@@ -234,14 +238,8 @@ export function PortfolioView() {
           error={error}
           onRetry={() => runOptimization()}
           onDismiss={() => setError(null)}
-          suggestedAction={
-            error.toLowerCase().includes('connect') ||
-            error.toLowerCase().includes('fetch') ||
-            error.toLowerCase().includes('timeout') ||
-            error.toLowerCase().includes('offline')
-              ? 'The backend may be spinning up on Render free tier. Please wait ~30-45s and click Retry.'
-              : 'Provide at least 2 valid tickers separated by commas (e.g., AAPL, MSFT).'
-          }
+          suggestedAction="Provide at least 2 valid tickers separated by commas, or switch to Sandbox Mode."
+          onSwitchToSandbox={() => setDemoMode(true)}
         />
       )}
 

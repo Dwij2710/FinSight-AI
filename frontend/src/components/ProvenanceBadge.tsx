@@ -19,8 +19,13 @@ export function ProvenanceBadge({
   style,
   className = ''
 }: ProvenanceBadgeProps) {
+  // If no verified data has been loaded and not in demo mode, do not render a live badge
+  if (!source && !isDemo) {
+    return null;
+  }
+
   // Determine effective source
-  const effectiveSource: DataSourceType = isDemo ? 'simulated' : (source || 'live');
+  const effectiveSource: DataSourceType = isDemo ? 'simulated' : source!;
 
   // Format timestamp
   const formatTime = (ts?: string) => {

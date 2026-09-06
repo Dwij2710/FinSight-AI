@@ -103,12 +103,22 @@ export async function checkBackendHealth(): Promise<BackendHealthStatus> {
         uptime_seconds: data.uptime_seconds,
         last_data_fetch_ts: data.last_data_fetch_ts,
         yfinance_reachable: data.yfinance_reachable,
-        latencyMs: Date.now() - start
+        latencyMs: Date.now() - start,
+        httpStatus: res.status
       };
     }
-    return { online: false };
-  } catch {
-    return { online: false };
+    return {
+      online: false,
+      httpStatus: res.status,
+      errorMessage: res.status === 404
+        ? `Backend service returned 404 Not Found at ${API_BASE_URL}. Verify your Render deployment URL.`
+        : `Backend returned HTTP ${res.status} (${res.statusText || 'Error'})`
+    };
+  } catch (err: any) {
+    return {
+      online: false,
+      errorMessage: err?.message || `Cannot reach backend at ${API_BASE_URL}. Connection refused or timed out.`
+    };
   }
 }
 

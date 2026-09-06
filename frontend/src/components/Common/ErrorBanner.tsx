@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { AlertCircle, RefreshCw, ChevronDown, ChevronUp, XCircle, Info } from 'lucide-react';
+import { AlertCircle, RefreshCw, ChevronDown, ChevronUp, XCircle, Info, Database } from 'lucide-react';
 
 interface ErrorBannerProps {
   title?: string;
@@ -10,6 +10,7 @@ interface ErrorBannerProps {
   onDismiss?: () => void;
   variant?: 'error' | 'warning' | 'info';
   suggestedAction?: string;
+  onSwitchToSandbox?: () => void;
 }
 
 export function ErrorBanner({
@@ -18,7 +19,8 @@ export function ErrorBanner({
   onRetry,
   onDismiss,
   variant = 'error',
-  suggestedAction
+  suggestedAction,
+  onSwitchToSandbox
 }: ErrorBannerProps) {
   const [expanded, setExpanded] = useState(false);
   const [retrying, setRetrying] = useState(false);
@@ -169,6 +171,28 @@ export function ErrorBanner({
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+          {onSwitchToSandbox && (
+            <button
+              onClick={onSwitchToSandbox}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 12px',
+                fontSize: '0.8rem',
+                borderRadius: '8px',
+                background: 'rgba(168, 85, 247, 0.22)',
+                border: '1px solid #A855F7',
+                color: '#E9D5FF',
+                cursor: 'pointer',
+                fontWeight: 600
+              }}
+            >
+              <Database size={13} />
+              <span>Use Sandbox</span>
+            </button>
+          )}
+
           {onRetry && (
             <button
               onClick={handleRetry}

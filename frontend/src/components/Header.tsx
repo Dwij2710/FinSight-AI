@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { TrendingUp, RefreshCw, AlertTriangle, ShieldCheck, Database, Radio, Sun, Moon } from 'lucide-react';
+import { TrendingUp, RefreshCw, AlertTriangle, AlertCircle, ShieldCheck, Database, Radio, Sun, Moon } from 'lucide-react';
 import { TickerBanner } from './TickerBanner';
 import { useMarketData } from '../context/MarketDataContext';
 import { useTheme } from '../context/ThemeContext';
@@ -293,6 +293,27 @@ export function Header({
               <RefreshCw size={11} className={refreshing ? 'spin' : ''} />
               <span>Retry Probe</span>
             </button>
+            {elapsedSeconds > 40 && (
+              <button
+                onClick={() => setDemoMode(true)}
+                style={{
+                  background: 'rgba(168, 85, 247, 0.25)',
+                  color: '#E9D5FF',
+                  border: '1px solid #A855F7',
+                  borderRadius: 6,
+                  padding: '3px 12px',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5
+                }}
+              >
+                <Database size={11} />
+                <span>Switch to Sandbox Mode</span>
+              </button>
+            )}
           </div>
           {/* Progress bar estimation */}
           <div style={{ width: '100%', maxWidth: 480, height: 4, background: 'rgba(245, 158, 11, 0.2)', borderRadius: 2, overflow: 'hidden' }}>
@@ -303,6 +324,55 @@ export function Header({
               transition: 'width 1s linear'
             }} />
           </div>
+        </div>
+      )}
+
+      {/* Backend Provider Error / Unreachable Banner */}
+      {freshnessState === 'PROVIDER_ERROR' && !isDemoMode && (
+        <div style={{
+          background: 'rgba(239, 68, 68, 0.12)',
+          borderBottom: '1px solid rgba(239, 68, 68, 0.35)',
+          padding: '10px 24px',
+          fontSize: '0.8rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 12,
+          flexWrap: 'wrap',
+          color: '#FECDD3'
+        }}>
+          <AlertCircle size={16} color="var(--accent-rose)" />
+          <span>
+            <strong>API Backend Offline:</strong> {backendHealth?.errorMessage || 'Unable to connect to financial API backend.'}
+          </span>
+          <button
+            onClick={() => setDemoMode(true)}
+            style={{
+              background: 'rgba(168, 85, 247, 0.25)',
+              color: '#E9D5FF',
+              border: '1px solid #A855F7',
+              borderRadius: 6,
+              padding: '4px 12px',
+              fontSize: '0.78rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6
+            }}
+          >
+            <Database size={13} />
+            <span>Switch to Sandbox Mode</span>
+          </button>
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="btn-secondary"
+            style={{ padding: '4px 10px', fontSize: '0.75rem', borderRadius: 6 }}
+          >
+            <RefreshCw size={11} className={refreshing ? 'spin' : ''} />
+            <span>Retry Connection</span>
+          </button>
         </div>
       )}
 

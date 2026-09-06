@@ -7,8 +7,10 @@ import { getForecast } from '../lib/api';
 import { MultiLineChart } from './Common/Charts';
 import { ProvenanceBadge } from './ProvenanceBadge';
 import { ErrorBanner } from './Common/ErrorBanner';
+import { useMarketData } from '../context/MarketDataContext';
 
 export function ForecastView({ ticker }: { ticker: string }) {
+  const { isDemoMode, setDemoMode } = useMarketData();
   const [data, setData] = useState<ForecastData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -78,7 +80,7 @@ export function ForecastView({ ticker }: { ticker: string }) {
 
   useEffect(() => {
     runModel();
-  }, [ticker]);
+  }, [ticker, isDemoMode]);
 
   // Derive price metrics
   const lastActual = data?.history && data.history.length > 0
@@ -151,11 +153,13 @@ export function ForecastView({ ticker }: { ticker: string }) {
         </div>
 
         {/* Provenance Badge */}
-        <ProvenanceBadge
-          source={data?.data_source}
-          fetchedAt={data?.fetched_at}
-          isDemo={isDemo}
-        />
+        {(data || isDemo) && (
+          <ProvenanceBadge
+            source={data?.data_source}
+            fetchedAt={data?.fetched_at}
+            isDemo={isDemo}
+          />
+        )}
       </div>
 
       {/* Model Agreement & Consensus Banner */}
@@ -214,7 +218,8 @@ export function ForecastView({ ticker }: { ticker: string }) {
           error={error}
           onRetry={runModel}
           onDismiss={() => setError(null)}
-          suggestedAction="Verify that the ticker symbol exists or try smaller (p, d, q) orders."
+          suggestedAction="Verify that the ticker symbol exists or switch to Sandbox Mode to test the UI."
+          onSwitchToSandbox={() => setDemoMode(true)}
         />
       )}
 

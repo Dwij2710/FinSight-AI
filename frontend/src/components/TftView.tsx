@@ -7,8 +7,10 @@ import { analyzeTft } from '../lib/api';
 import { RiskGauge, AllocationBars, MultiLineChart } from './Common/Charts';
 import { ErrorBanner } from './Common/ErrorBanner';
 import { ProvenanceBadge } from './ProvenanceBadge';
+import { useMarketData } from '../context/MarketDataContext';
 
 export function TftView({ ticker }: { ticker: string }) {
+  const { isDemoMode, setDemoMode } = useMarketData();
   const [data, setData] = useState<TftData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,7 +33,7 @@ export function TftView({ ticker }: { ticker: string }) {
 
   useEffect(() => {
     fetchTft();
-  }, [ticker]);
+  }, [ticker, isDemoMode]);
 
   // Key event annotations for factor attention weights
   const factorAnnotations: Record<string, string> = {
@@ -43,13 +45,14 @@ export function TftView({ ticker }: { ticker: string }) {
   };
 
   const attentionItems = (data?.attention_weights || []).map(a => ({
-    label: `${a.factor} (${factorAnnotations[a.factor] || 'Macro Driver'})`,
-    value: a.weight_pct
+    label: a.factor,
+    value: a.weight_pct,
+    annotation: factorAnnotations[a.factor]
   }));
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      {/* Title */}
+      {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
@@ -75,11 +78,13 @@ export function TftView({ ticker }: { ticker: string }) {
         </div>
 
         {/* Provenance Badge */}
-        <ProvenanceBadge
-          source={data?.data_source}
-          fetchedAt={data?.fetched_at}
-          isDemo={isDemo}
-        />
+        {(data || isDemo) && (
+          <ProvenanceBadge
+            source={data?.data_source}
+            fetchedAt={data?.fetched_at}
+            isDemo={isDemo}
+          />
+        )}
       </div>
 
       {error && (
@@ -88,7 +93,8 @@ export function TftView({ ticker }: { ticker: string }) {
           error={error}
           onRetry={fetchTft}
           onDismiss={() => setError(null)}
-          suggestedAction="Ensure the backend service has network connectivity to download macro factor series."
+          suggestedAction="Ensure the backend service is running, or switch to Sandbox Mode."
+          onSwitchToSandbox={() => setDemoMode(true)}
         />
       )}
 

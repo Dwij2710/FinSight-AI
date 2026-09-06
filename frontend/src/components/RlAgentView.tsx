@@ -7,8 +7,10 @@ import { simulateRlAgent } from '../lib/api';
 import { MultiLineChart } from './Common/Charts';
 import { ErrorBanner } from './Common/ErrorBanner';
 import { ProvenanceBadge } from './ProvenanceBadge';
+import { useMarketData } from '../context/MarketDataContext';
 
 export function RlAgentView({ ticker }: { ticker: string }) {
+  const { isDemoMode, setDemoMode } = useMarketData();
   const [data, setData] = useState<RlSimulationData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,7 +45,7 @@ export function RlAgentView({ ticker }: { ticker: string }) {
 
   useEffect(() => {
     runSimulation();
-  }, [ticker]);
+  }, [ticker, isDemoMode]);
 
   // Chart series
   const dates = data?.history.map(h => h.date) || [];
@@ -86,11 +88,13 @@ export function RlAgentView({ ticker }: { ticker: string }) {
               <Cpu size={14} /> Engine: {data.engine}
             </span>
           )}
-          <ProvenanceBadge
-            source={data?.data_source}
-            fetchedAt={data?.fetched_at}
-            isDemo={isDemo}
-          />
+          {(data || isDemo) && (
+            <ProvenanceBadge
+              source={data?.data_source}
+              fetchedAt={data?.fetched_at}
+              isDemo={isDemo}
+            />
+          )}
         </div>
       </div>
 
@@ -100,7 +104,8 @@ export function RlAgentView({ ticker }: { ticker: string }) {
           error={error}
           onRetry={runSimulation}
           onDismiss={() => setError(null)}
-          suggestedAction="Verify that the ticker has sufficient historical price bars."
+          suggestedAction="Ensure the backend service is running, or switch to Sandbox Mode."
+          onSwitchToSandbox={() => setDemoMode(true)}
         />
       )}
 

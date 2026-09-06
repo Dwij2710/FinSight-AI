@@ -61,9 +61,22 @@ export function MarketDataProvider({ children }: { children: ReactNode }) {
       if (!health.online) {
         if (isDemoMode) {
           setFreshnessState('DEMO_SIMULATION');
+        } else if (health.httpStatus === 404) {
+          // 404 is NOT a cold start: endpoint does not exist or service was removed
+          setFreshnessState('PROVIDER_ERROR');
+          setWakingStartedAt(null);
         } else {
-          setFreshnessState('BACKEND_STARTING');
-          setWakingStartedAt(prev => prev || Date.now());
+          // Render cold start takes ~35-45s. If it exceeds 75s, transition to PROVIDER_ERROR
+          setWakingStartedAt(prev => {
+            const start = prev || Date.now();
+            const elapsed = (Date.now() - start) / 1000;
+            if (elapsed > 75) {
+              setFreshnessState('PROVIDER_ERROR');
+            } else {
+              setFreshnessState('BACKEND_STARTING');
+            }
+            return start;
+          });
         }
         return;
       } else {
@@ -93,13 +106,11 @@ export function MarketDataProvider({ children }: { children: ReactNode }) {
       console.warn('[MarketDataProvider] Quote synchronization failed:', err);
       if (isDemoMode) {
         setFreshnessState('DEMO_SIMULATION');
-      } else if (!backendHealth?.online) {
-        setFreshnessState('BACKEND_STARTING');
       } else {
         setFreshnessState('PROVIDER_ERROR');
       }
     }
-  }, [isDemoMode, backendHealth?.online]);
+  }, [isDemoMode]);
 
   useEffect(() => {
     refreshQuotes();

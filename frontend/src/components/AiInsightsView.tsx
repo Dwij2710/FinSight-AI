@@ -7,8 +7,10 @@ import { getNewsSentiment, getTradeSignal } from '../lib/api';
 import { AllocationBars } from './Common/Charts';
 import { ErrorBanner } from './Common/ErrorBanner';
 import { ProvenanceBadge } from './ProvenanceBadge';
+import { useMarketData } from '../context/MarketDataContext';
 
 export function AiInsightsView({ ticker }: { ticker: string }) {
+  const { isDemoMode, setDemoMode } = useMarketData();
   const [sentiment, setSentiment] = useState<SentimentData | null>(null);
   const [signal, setSignal] = useState<TradeSignalData | null>(null);
   const [loadingSentiment, setLoadingSentiment] = useState(false);
@@ -39,7 +41,7 @@ export function AiInsightsView({ ticker }: { ticker: string }) {
 
   useEffect(() => {
     fetchInsights();
-  }, [ticker]);
+  }, [ticker, isDemoMode]);
 
   const importanceItems = (signal?.feature_importance || []).map(f => ({
     label: f.feature,
@@ -87,11 +89,13 @@ export function AiInsightsView({ ticker }: { ticker: string }) {
         </div>
 
         {/* Provenance Badge */}
-        <ProvenanceBadge
-          source={sentiment?.data_source || signal?.data_source}
-          fetchedAt={sentiment?.fetched_at || signal?.fetched_at}
-          isDemo={isDemo}
-        />
+        {(sentiment || signal || isDemo) && (
+          <ProvenanceBadge
+            source={sentiment?.data_source || signal?.data_source}
+            fetchedAt={sentiment?.fetched_at || signal?.fetched_at}
+            isDemo={isDemo}
+          />
+        )}
       </div>
 
       {error && (
@@ -100,7 +104,8 @@ export function AiInsightsView({ ticker }: { ticker: string }) {
           error={error}
           onRetry={fetchInsights}
           onDismiss={() => setError(null)}
-          suggestedAction="Ensure the backend service is running and the ticker has news coverage."
+          suggestedAction="Ensure the backend service is running, or switch to Sandbox Mode."
+          onSwitchToSandbox={() => setDemoMode(true)}
         />
       )}
 
