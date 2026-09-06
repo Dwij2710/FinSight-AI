@@ -14,8 +14,10 @@ jobs:
 
     steps:
       - name: Ping Backend /health
+        env:
+          RENDER_HEALTH_URL: ${{ secrets.RENDER_HEALTH_URL }}
         run: |
-          BACKEND_URL="https://finsight-ai-3ffu.onrender.com/health"
+          BACKEND_URL="${RENDER_HEALTH_URL:-https://finsight-ai-backend.onrender.com/health}"
           echo "Sending keep-alive ping to ${BACKEND_URL}..."
           
           # Allow up to 45s timeout for cold start wakeups

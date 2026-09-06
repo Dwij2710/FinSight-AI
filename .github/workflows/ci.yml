@@ -53,3 +53,71 @@ jobs:
       - name: Verify Build
         working-directory: frontend
         run: npm run build
+
+  render-deploy:
+    name: Render Backend Deployment
+    runs-on: ubuntu-latest
+    needs: [backend-test, frontend-build]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Trigger Render Deploy Hook
+        id: deploy
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
+            echo "::warning title=Missing Secret::RENDER_DEPLOY_HOOK_URL is not set in GitHub repository secrets. Skipping automated deployment trigger."
+            echo "To enable automated Render deployment and status checks:"
+            echo "1. Go to your Render Dashboard -> Your Service -> Settings -> Deploy Hook."
+            echo "2. Copy the Deploy Hook URL."
+            echo "3. Add it to GitHub Repository -> Settings -> Secrets and variables -> Actions as RENDER_DEPLOY_HOOK_URL."
+            exit 0
+          fi
+
+          echo "Triggering Render deployment via deploy hook..."
+          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X POST "$RENDER_DEPLOY_HOOK_URL")
+          HTTP_STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS:" | cut -d':' -f2)
+          BODY=$(echo "$RESPONSE" | grep -v "HTTP_STATUS:")
+
+          echo "Render Response Code: $HTTP_STATUS"
+          echo "Render Response Body: $BODY"
+
+          if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
+            echo "Render deployment triggered successfully."
+          else
+            echo "::error::Failed to trigger Render deployment. HTTP Status: $HTTP_STATUS. Response: $BODY"
+            exit 1
+          fi
+
+      - name: Verify Backend Health (Optional Polling)
+        id: health_check
+        env:
+          RENDER_HEALTH_URL: ${{ secrets.RENDER_HEALTH_URL }}
+        run: |
+          TARGET_URL="${RENDER_HEALTH_URL:-}"
+          if [ -z "$TARGET_URL" ]; then
+            echo "RENDER_HEALTH_URL secret is not set. Deployment triggered without health endpoint polling."
+            echo "Tip: Set RENDER_HEALTH_URL secret (e.g. https://<service>.onrender.com/health) to wait for live readiness verification."
+            exit 0
+          fi
+
+          echo "Waiting for backend service at: $TARGET_URL"
+          MAX_ATTEMPTS=24
+          SLEEP_SECONDS=10
+          ATTEMPT=0
+
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            ATTEMPT=$((ATTEMPT+1))
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$TARGET_URL" || echo "000")
+            echo "Attempt $ATTEMPT/$MAX_ATTEMPTS: HTTP $HTTP_CODE"
+
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "Backend is live and healthy! Deployment verified."
+              exit 0
+            fi
+
+            sleep $SLEEP_SECONDS
+          done
+
+          echo "::warning::Health check timed out after 4 minutes. The container may still be building or starting."
