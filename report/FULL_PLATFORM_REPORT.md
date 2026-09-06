@@ -2,37 +2,38 @@
 
 **Author:** Dwij Prajapati  
 **Platform Version:** 2.4.0 (Production Release)  
-**Date:** September 2026  
+**Document Classification:** Comprehensive Technical Architecture, Econometric & Machine Learning Reference Manual  
+**Publication Date:** September 2026  
 **Repository:** [github.com/Dwij2710/FinSight-AI](https://github.com/Dwij2710/FinSight-AI)  
 **Production URL:** [frontend-orpin-xi-99.vercel.app](https://frontend-orpin-xi-99.vercel.app/)  
 **Backend Infrastructure:** FastAPI containerized on Render with automated UptimeRobot Keep-Alive & GitHub Actions CI/CD  
 
 ---
 
-## Executive Summary
+## Executive Abstract
 
-**FinSight AI** is an institutional-grade, full-stack quantitative equity analytics and machine learning trading platform. Built to bridge the structural gap between multi-million-dollar hedge fund infrastructure and individual quantitative traders, the platform integrates high-frequency econometric forecasting, multivariate deep attention mechanisms, reinforcement learning portfolio agents, Modern Portfolio Theory (MPT) optimization, financial transformer NLP sentiment analysis, real-time breakout alerting, and institutional rebalance order execution into a cohesive, zero-downtime, reactive web application.
+**FinSight AI** is an institutional-grade, full-stack quantitative equity analytics and machine learning trading platform. Built to bridge the structural divide between multi-million-dollar hedge fund infrastructure and quantitative investors, the platform integrates high-frequency econometric forecasting, multivariate deep attention mechanisms, reinforcement learning portfolio agents, Modern Portfolio Theory (MPT) optimization, financial transformer NLP sentiment analysis, real-time breakout alerting, and institutional rebalance order execution into a cohesive, zero-downtime, reactive web application.
 
-The core tenet of the platform is **Mathematical Honesty and Data Provenance**:
-1. **Zero-Synthetic Guarantee in Live Mode**: Whenever the platform claims to represent live financial markets, every quote, covariance matrix, forecast, sentiment score, and risk factor is sourced strictly from verified live market data providers (e.g., Yahoo Finance / Polygon feeds). Synthetic data is segregated into an explicitly labeled, deterministic Mulberry32 sandbox.
+The core philosophical foundation of the platform is **Data Provenance, Mathematical Honesty, and Execution Realism**:
+1. **Zero-Synthetic Guarantee in Live Mode**: Whenever the platform claims to represent live financial markets, every quote, covariance matrix, forecast, sentiment score, and risk factor is sourced strictly from verified live market data providers (Yahoo Finance / Polygon feeds). Synthetic data is strictly segregated into an explicitly labeled, deterministic Mulberry32 sandbox.
 2. **Cold-Start Zero-Downtime Architecture**: Designed to operate flawlessly on containerized cloud microservices (Render free tier), the system features an isolated `/api/warmup` endpoint, client-side fast-polling with exponential backoff retry jitter, real-time spin-up counters, and automated UptimeRobot keep-alive automation.
 3. **Rigorous Out-of-Sample Validation**: Blind holdout backtesting (RMSE, MAE, MAPE), Augmented Dickey-Fuller stationarity validation, Platt probability calibration, and Sharpe-ratio penalization for turnover and transaction costs ensure quantitative realism.
 
 ---
 
-## Table of Contents
-1. [System Architecture & Technology Stack](#1-system-architecture--technology-stack)
-2. [Data Engineering & Single-Source-of-Truth Engine](#2-data-engineering--single-source-of-truth-engine)
-3. [Module 1: Econometric Time-Series Forecasting (SARIMAX / Prophet)](#3-module-1-econometric-time-series-forecasting)
-4. [Module 2: Temporal Fusion Transformer & Macro Factor Attention](#4-module-2-temporal-fusion-transformer--macro-factor-attention)
-5. [Module 3: Deep Reinforcement Learning Portfolio Agent (PPO / FinRL)](#5-module-3-deep-reinforcement-learning-portfolio-agent)
-6. [Module 4: Modern Portfolio Theory & Staged Rebalancing](#6-module-4-modern-portfolio-theory--staged-rebalancing)
-7. [Module 5: Financial Transformer NLP & Trade Signal Classifier](#7-module-5-financial-transformer-nlp--trade-signal-classifier)
-8. [Module 6: Real-Time Price Breakout Alerting & Push Engine](#8-module-6-real-time-price-breakout-alerting--push-engine)
-9. [Module 7: Modern Glassmorphic Frontend & High-DPI Exporters](#9-module-7-modern-glassmorphic-frontend--high-dpi-exporters)
-10. [Module 8: Cloud Infrastructure, CI/CD Pipeline & Cold-Start Resilience](#10-module-8-cloud-infrastructure-cicd-pipeline--cold-start-resilience)
-11. [Verification, Mathematical Correctness & Test Results](#11-verification-mathematical-correctness--test-results)
-12. [Future Roadmap & Conclusion](#12-future-roadmap--conclusion)
+## Master Module Reference Matrix
+
+| Module ID | Module Title | Primary Mathematical / ML Model | Core Backend Source | Core Frontend View |
+| :--- | :--- | :--- | :--- | :--- |
+| **MOD-01** | **Centralized Market Data** | Mutex-Locked TTL In-Memory & SQLite Cache | `backend/app/services/market_data.py` | `frontend/src/context/MarketDataContext.tsx` |
+| **MOD-02** | **Econometric Forecasting** | $\text{SARIMAX}(p,d,q)\times(P,D,Q)_s$ + STL Loess | `backend/app/routes/forecast.py` | `frontend/src/components/ForecastView.tsx` |
+| **MOD-03** | **Temporal Fusion Transformer** | Scaled Dot-Product Macro Factor Attention | `backend/app/routes/tft.py` | `frontend/src/components/TftView.tsx` |
+| **MOD-04** | **Reinforcement Learning Agent** | PPO Actor-Critic on Gymnasium FinRL MDP | `backend/app/routes/rl_agent.py` | `frontend/src/components/RlAgentView.tsx` |
+| **MOD-05** | **Portfolio Optimization** | Markowitz Mean-Variance SLSQP + Staged Rebalancing | `backend/app/routes/portfolio.py` | `frontend/src/components/PortfolioView.tsx` |
+| **MOD-06** | **AI Sentiment & Signals** | ProsusAI FinBERT + Platt-Calibrated Random Forest | `backend/app/routes/news_sentiment.py` | `frontend/src/components/AiInsightsView.tsx` |
+| **MOD-07** | **Real-Time Breakout Alerts** | Bidirectional Threshold Engine + Web Push | `frontend/src/context/AlertContext.tsx` | `frontend/src/components/WatchlistView.tsx` |
+| **MOD-08** | **Glassmorphic UI & Exporters** | Next.js 14 App Router + High-DPI Canvas Exporter | `frontend/src/lib/chartExport.ts` | `frontend/src/app/globals.css` |
+| **MOD-09** | **DevOps & CI/CD Pipeline** | GitHub Actions Workflow + Render Deploy Webhook | `.github/workflows/ci.yml` | `render.yaml` |
 
 ---
 
@@ -49,18 +50,18 @@ FinSight AI employs a decoupled, dual-cloud distributed architecture separating 
 |  * ThemeContext (Dark / Light Dynamic Design Tokens)                          |
 |  * High-DPI Canvas 2x PNG Chart Exporter & RFC-4180 CSV Streamer              |
 +---------------------------------------+---------------------------------------+
-                                        | HTTPS / JSON (REST + Diagnostics)
-                                        v
+                                        │ HTTPS / JSON (REST + Diagnostics)
+                                        ▼
 +-------------------------------------------------------------------------------+
 |                       API & COMPUTATION LAYER (Render Cloud)                  |
 |  FastAPI - Uvicorn - Python 3.10 Container                                    |
 |  * MarketDataService (Thread-safe Lock, TTL Cache, Provenance Stamping)       |
 |  * Warmup Endpoint (/api/warmup - Bypass heavy ML for instant 200 OK)         |
 +---------------------------------------+---------------------------------------+
-                                        |
+                                        │
        +--------------------------------+--------------------------------+
-       |                                |                                |
-       v                                v                                v
+       │                                │                                │
+       ▼                                ▼                                ▼
 +--------------+               +------------------+             +-----------------+
 | Econometrics |               | Machine Learning |             | Quant Portfolio |
 |  * SARIMAX   |               |  * TFT Attention |             |  * SLSQP MPT    |
@@ -70,236 +71,143 @@ FinSight AI employs a decoupled, dual-cloud distributed architecture separating 
 +--------------+               +------------------+             +-----------------+
 ```
 
-### Core Technology Stack:
-- **Frontend**: Next.js 14.2.35, React 18, TypeScript, Lucide React icons, Vanilla CSS Design Tokens (Glassmorphic dark/light palette).
-- **Backend API**: FastAPI 0.110+, Starlette, Pydantic v2, Uvicorn, Python 3.10.
-- **Mathematical & Statistical Modeling**: NumPy, SciPy (SLSQP optimization), Pandas, Statsmodels (SARIMAX, ADF test, seasonal decomposition), Prophet.
-- **Machine Learning & Deep Learning**: Scikit-Learn (Random Forest, Platt Calibration, StandardScaler), PyTorch, HuggingFace Transformers (ProsusAI FinBERT), Gymnasium (Custom FinRL trading environment).
-- **Market Data Feed**: Centralized `MarketDataService` pulling from Yahoo Finance (`yfinance`) with SQLite/In-Memory fallback caching, request deduplication, and telemetry headers.
-- **CI/CD & DevOps**: GitHub Actions (Ubuntu 22.04), automated `pytest` suites, Next.js typecheck/build verification, automated Render Deploy Hook execution, and UptimeRobot continuous keep-alive pingers.
+### 1.1 Frontend Technology Stack:
+- **Framework**: Next.js 14.2.35 (React 18, App Router architecture).
+- **Language**: TypeScript (Strict Mode enabled).
+- **Design Tokens**: Custom Vanilla CSS Tokens with Glassmorphic HSL palettes (Dark Midnight and Crisp Day Light modes).
+- **Icons**: Lucide React.
+- **Export Engine**: HTML5 Canvas rasterization at $2\times$ retina device pixel ratio + RFC-4180 CSV data serialization.
+
+### 1.2 Backend & Quantitative Modeling Stack:
+- **API Framework**: FastAPI 0.110+, Starlette, Pydantic v2, Uvicorn ASGI.
+- **Runtime**: Python 3.10.11.
+- **Econometrics & Statistics**: Statsmodels (SARIMAX, ADF unit-root testing, STL decomposition), SciPy (`scipy.optimize.minimize` via SLSQP), NumPy, Pandas.
+- **Machine Learning**: Scikit-Learn (Random Forest, Platt probability calibration, StandardScaler), PyTorch.
+- **Natural Language Processing**: HuggingFace Transformers (`ProsusAI/finbert`), VADER Sentiment Analysis.
+- **Reinforcement Learning**: Gymnasium (custom FinRL market environment), Stable-Baselines3 / Custom PPO Actor-Critic.
 
 ---
 
 ## 2. Data Engineering & Single-Source-of-Truth Engine
 
-A pervasive flaw in modern quantitative web applications is data fragmentation: different views fetching conflicting price quotes for the same ticker at varying timestamps, leading to irreconcilable metrics.
+A pervasive flaw in modern financial applications is data fragmentation: different views fetching conflicting price quotes for the same ticker at varying timestamps, leading to irreconcilable metrics. FinSight AI resolves this through its centralized `MarketDataService`:
 
-FinSight AI resolves this by enforcing a **Centralized Single Source of Truth**:
-1. **`MarketDataService` (`backend/app/services/market_data.py`)**:
-   - Singleton service managing all quote, historical bar, and financial data requests.
-   - **Thread-Safe Mutex Lock (`threading.Lock`)**: Prevents race conditions during concurrent cache refreshes.
-   - **Configurable TTL Caching**: Quote cache (30-second TTL during market hours), Historical bar cache (5-minute TTL).
-   - **Telemetry & Provenance Stamp**: Every payload returned by the API is enriched with metadata:
-     ```json
-     {
-       "ticker": "AAPL",
-       "price": 224.50,
-       "data_source": "live",
-       "fetched_at": "2026-09-06T14:30:00.000Z",
-       "cache_hit": false,
-       "provider": "yfinance"
-     }
-     ```
-2. **Zero-Synthetic Guarantee**:
-   - In `live` mode, if a ticker cannot be resolved or the provider times out, the service raises a clean `HTTP 502 Bad Gateway` or `HTTP 404 Not Found` with actionable diagnostics. It **never** silently replaces live market quotes with random Gaussian numbers.
-   - The synthetic sandbox is isolated strictly behind an explicit toggle, driven by a deterministic Mulberry32 Pseudo-Random Number Generator (PRNG).
+### 2.1 Concurrency & Mutex Protection
+To prevent API stampedes when multiple portfolio components request quotes simultaneously:
+- **Thread-Safe Mutex (`threading.Lock`)**: Guards cache access.
+- **Two-Tier TTL Caching**:
+  - Quotes: 30-second TTL during market hours.
+  - Historical Bars: 5-minute TTL for daily OHLCV series.
+
+### 2.2 Telemetry Audit Metadata
+Every payload emitted by the API is enriched with provenance metadata:
+```json
+{
+  "ticker": "AAPL",
+  "price": 224.50,
+  "data_source": "live",
+  "fetched_at": "2026-09-06T15:30:00.000Z",
+  "cache_hit": false,
+  "provider": "yfinance"
+}
+```
+
+### 2.3 Zero-Synthetic Guarantee in Live Mode
+In `live` mode, if a ticker cannot be resolved or the provider times out, the service raises an explicit `HTTP 404` or `HTTP 502` with actionable diagnostic information. It **never** silently replaces live market quotes with random numbers.
 
 ---
 
-## 3. Module 1: Econometric Time-Series Forecasting
+## 3. Module Deep Dives
 
-The **Forecasting Module** provides multi-step ahead forward stock price trajectory predictions with statistical confidence envelopes.
-
-### Mathematical Formulation
-The foundational model is the Seasonal Autoregressive Integrated Moving Average with Exogenous Regressors:
-$$\text{SARIMAX}(p, d, q) \times (P, D, Q)_s$$
-
-The model equation for differenced series $y_t^* = (1 - L)^d (1 - L^s)^D y_t$ is:
-$$\Phi_P(L^s) \phi_p(L) y_t^* = \Theta_Q(L^s) \theta_q(L) \epsilon_t + \beta^T X_t$$
-
-Where:
-- $L$ is the lag operator ($L^k y_t = y_{t-k}$).
-- $\phi_p(L) = 1 - \sum_{i=1}^p \phi_i L^i$ represents the regular autoregressive polynomial.
-- $\theta_q(L) = 1 + \sum_{j=1}^q \theta_j L^j$ represents the moving average polynomial.
-- $\Phi_P(L^s)$ and $\Theta_Q(L^s)$ represent the seasonal AR and MA components with period $s=5$ (trading week).
-- $\epsilon_t \sim \mathcal{N}(0, \sigma^2)$ is Gaussian white noise.
-
-### Key Capabilities & Pipeline:
+### 3.1 Econometric Time-Series Forecasting (`MOD-02`)
+The forecasting engine models non-stationary price dynamics using:
+$$\Phi_P(L^s) \phi_p(L) (1 - L)^d (1 - L^s)^D y_t = \Theta_Q(L^s) \theta_q(L) \epsilon_t + \mathbf{\beta}^T \mathbf{X}_t$$
 1. **Stationarity Diagnostics**: Runs the Augmented Dickey-Fuller (ADF) test:
-   $$\Delta y_t = \alpha + \beta t + \gamma y_{t-1} + \sum_{k=1}^m \delta_k \Delta y_{t-k} + e_t$$
-   If the p-value exceeds $\alpha = 0.05$, the order of differencing $d$ is dynamically incremented.
-2. **Seasonal Decomposition (Loess / STL)**: Isolates the raw time series into Trend, Seasonal ($s=5$ trading days), and Residual components.
-3. **Blind Holdout Backtesting**: The last 20% of historical bars are strictly partitioned into an out-of-sample evaluation set. The model forecasts across the holdout horizon, computing:
-   - **Root Mean Squared Error (RMSE)**: $\sqrt{\frac{1}{N}\sum_{t=1}^N (y_t - \hat{y}_t)^2}$
-   - **Mean Absolute Error (MAE)**: $\frac{1}{N}\sum_{t=1}^N |y_t - \hat{y}_t|$
-   - **Mean Absolute Percentage Error (MAPE)**: $\frac{100\%}{N}\sum_{t=1}^N \left|\frac{y_t - \hat{y}_t}{y_t}\right|$
-4. **Interactive Horizon & Presets**: Users can test 7, 14, 30, and 90-day forecast horizons with customizable date ranges (6M, 1Y, 2Y, 5Y, Custom).
+   $$\Delta y_t = \alpha + \beta t + \gamma y_{t-1} + \sum_{i=1}^k \delta_i \Delta y_{t-i} + e_t$$
+   Automatically increments differencing order $d$ if $p\text{-value} > 0.05$.
+2. **STL Loess Seasonal Decomposition**: Isolates raw price series into Trend ($T_t$), weekly 5-day Seasonality ($S_t$), and idiosyncratic Residual noise ($R_t$).
+3. **Blind Holdout Backtesting**: Withholds the final 20% of historical bars to compute genuine out-of-sample RMSE, MAE, MAPE, and Mean Directional Accuracy (MDA).
+4. **Parametric Confidence Bounds**: Generates 80% ($\pm 1.282\sigma$) and 95% ($\pm 1.960\sigma$) confidence envelopes.
 
 ---
 
-## 4. Module 2: Temporal Fusion Transformer & Macro Factor Attention
-
-Individual equities do not move in a vacuum; their return distributions are heavily conditioned by macroeconomic regimes, monetary policy, and systemic risk sentiment.
-
-### Architecture & Macro Factor Attention
-The **TFT Module** integrates cross-asset macroeconomic factors:
-- **^TNX**: 10-Year US Treasury Yield (Proxy for risk-free rate and capital discount rates).
-- **^VIX**: CBOE Volatility Index (Market-wide implied volatility / fear gauge).
-- **DX-Y.NYB**: US Dollar Index (Global liquidity and currency valuation).
-- **CL=F**: Crude Oil Futures (Energy cost and inflation pressure).
-- **SPY**: S&P 500 Index (Broad equity market beta).
-
-### Self-Attention Mechanism
-The cross-factor attention weight $\alpha_i$ for macro driver $i$ at query step $t$ is computed via scaled dot-product attention:
-$$\alpha_i = \text{Softmax}\left(\frac{Q K_i^T}{\sqrt{d_k}}\right) = \frac{\exp\left(\frac{q \cdot k_i}{\sqrt{d_k}}\right)}{\sum_{j=1}^M \exp\left(\frac{q \cdot k_j}{\sqrt{d_k}}\right)}$$
-
-Where $Q$ is the ticker's recent price action embedding, and $K_i$ is the temporal embedding of macro factor $i$. The resulting attention weights sum strictly to $100\%$, providing quantitative explainability of the macro factors driving asset volatility.
+### 3.2 Temporal Fusion Transformer & Macro Factor Attention (`MOD-03`)
+Models how equities interact with broader macroeconomic regimes:
+- Macro Basket: 10Y US Treasury Yield (`^TNX`), CBOE Volatility Index (`^VIX`), US Dollar Index (`DX-Y.NYB`), WTI Crude Oil (`CL=F`), S&P 500 (`SPY`).
+- Scaled Dot-Product Attention:
+  $$\alpha_i = \text{Softmax}\left( \frac{\mathbf{q} \mathbf{k}_i^T}{\sqrt{d_k}} \right)$$
+- **100% Normalization Guarantee**: All factor attention weights sum strictly to $100.0\%$.
+- **Quantile Loss (Pinball Loss)**: Decodes multi-horizon quantiles ($q_{0.10}, q_{0.50}, q_{0.90}$):
+  $$\mathcal{L}_q(y, \hat{y}) = \max\left( q(y - \hat{y}), \, (1 - q)(\hat{y} - y) \right)$$
 
 ---
 
-## 5. Module 3: Deep Reinforcement Learning Portfolio Agent
-
-The **RL Trading Agent** trains an autonomous decision-making policy on financial market dynamics using Proximal Policy Optimization (PPO) within a custom Gymnasium-compliant environment.
-
-### State Space ($\mathcal{S}$)
-The observation vector $s_t \in \mathbb{R}^{10}$ at time step $t$ captures:
-$$s_t = \left[ r_t, \text{SMA}_{10, t}, \text{SMA}_{30, t}, \text{RSI}_t, \text{MACD}_t, \sigma_{20, t}, \text{Pos}_t, \text{Cash}_t, \Delta P_t, \text{Vol}_t \right]$$
-
-### Action Space ($\mathcal{A}$)
-Continuous allocation fraction $a_t \in [-1.0, 1.0]$:
-- $a_t > 0$: Long equity position fraction.
-- $a_t < 0$: Short equity position fraction.
-- $a_t = 0$: Liquidated to 100% risk-free cash.
-
-### Reward Function with Transaction Cost Penalization
-To eliminate high-churn, unexecutable policies, the agent's reward incorporates realistic transaction friction ($c = 10\text{ bps} = 0.001$):
-$$R_t = \Delta V_t - c \cdot |\Delta a_t| \cdot V_t - \lambda \cdot \sigma^2(r_{t-20:t})$$
-
-Where $V_t$ is total portfolio net asset value, $|\Delta a_t|$ is turnover volume, and $\lambda$ is a risk-aversion penalty coefficient.
-
-### Policy Optimization Objective (PPO Clip)
-$$L^{CLIP}(\theta) = \hat{\mathbb{E}}_t \left[ \min\left( \rho_t(\theta)\hat{A}_t, \, \text{clip}(\rho_t(\theta), 1-\epsilon, 1+\epsilon)\hat{A}_t \right) \right]$$
-Where $\rho_t(\theta) = \frac{\pi_\theta(a_t|s_t)}{\pi_{\theta_{old}}(a_t|s_t)}$ is the probability ratio and $\hat{A}_t$ is the Generalized Advantage Estimator (GAE).
+### 3.3 Deep Reinforcement Learning Trading Agent (`MOD-04`)
+An autonomous policy agent optimizing portfolio capital allocation within a custom Gymnasium FinRL environment:
+- **State Space ($\mathcal{S} \in \mathbb{R}^{10}$)**: Returns, moving average distances, normalized RSI, MACD, 20d volatility, prior allocation, cash ratio, volume delta, and drawdown.
+- **Continuous Action Space ($\mathcal{A} \in [-1.0, 1.0]$)**: Target equity allocation fraction.
+- **Reward Function with Friction**:
+  $$R_t = \frac{V_t - V_{t-1}}{V_{t-1}} - c \cdot |a_t - a_{t-1}| - \lambda \cdot \sigma_{20, t}^2$$
+  Deducts 10 bps ($c = 0.0010$) execution slippage and commissions on position changes.
+- **PPO Clipped Objective**: Prevents destabilizing policy updates using probability ratio clipping ($\epsilon = 0.20$).
 
 ---
 
-## 6. Module 4: Modern Portfolio Theory & Staged Rebalancing
-
-The **Portfolio Optimization Module** solves Markowitz Mean-Variance allocation frontiers and provides institutional-grade staged rebalancing execution schedules.
-
-### 1. Mathematical Optimization Objectives
-Given asset return vector $\mathbf{\mu} \in \mathbb{R}^N$ and covariance matrix $\mathbf{\Sigma} \in \mathbb{R}^{N \times N}$, the portfolio return and volatility are:
-$$R_p = \mathbf{w}^T \mathbf{\mu}, \quad \sigma_p = \sqrt{\mathbf{w}^T \mathbf{\Sigma} \mathbf{w}}$$
-
-Subject to budget and no-shorting constraints:
-$$\sum_{i=1}^N w_i = 1, \quad 0 \le w_i \le 1 \quad \forall i$$
-
-- **Maximum Sharpe Ratio Portfolio**:
-  $$\max_{\mathbf{w}} \frac{\mathbf{w}^T \mathbf{\mu} - R_f}{\sqrt{\mathbf{w}^T \mathbf{\Sigma} \mathbf{w}}}$$
-  Solved via Sequential Least Squares Programming (SLSQP).
-- **Minimum Volatility Portfolio**:
-  $$\min_{\mathbf{w}} \mathbf{w}^T \mathbf{\Sigma} \mathbf{w}$$
-- **Hierarchical / Equal Risk Parity**:
-  $$\text{RC}_i = w_i \frac{(\mathbf{\Sigma} \mathbf{w})_i}{\sigma_p} = \frac{\sigma_p}{N} \quad \forall i$$
-
-### 2. Automated Staged Rebalance Order Execution Plan
-When a user specifies total target portfolio capital (e.g., $\$100,000$), the system evaluates live quotes $P_i$ and generates actionable trade tickets:
-$$\Delta \text{Capital}_i = V_{\text{total}} \cdot (w_i^{\text{target}} - w_i^{\text{current}})$$
-$$\Delta \text{Shares}_i = \left\lfloor \frac{\Delta \text{Capital}_i}{P_i} \right\rfloor$$
-- Generates staged order tickets: `BUY`, `SELL`, or `HOLD`.
-- One-click **Copy Plan to Clipboard** and **Export to CSV**.
-- Non-custodial disclaimer ensuring regulatory compliance.
-
-### 3. Dynamic Historical Stress Testing
-Simulates portfolio drawdown across historical systemic liquidity shocks:
-- 2008 Global Financial Crisis (Subprime Crash)
-- 2020 COVID-19 Liquidity Shock
-- 2022 Fed Rate Hike Tech Drawdown
+### 3.4 Modern Portfolio Theory & Staged Rebalancing (`MOD-05`)
+Solves Markowitz Mean-Variance frontiers and transforms mathematical weights into executable orders:
+- **Maximum Sharpe Ratio Portfolio**: Solved via SLSQP convex optimization with risk-free rate $R_f = 4.0\%$.
+- **Minimum Volatility & Equal Risk Parity**: Solves pure risk minimization and equal volatility risk contributions ($\text{RC}_i = \frac{\sigma_p}{N}$).
+- **Staged Rebalance Order Execution**:
+  $$\Delta \text{Capital}_i = V \cdot (w_i^{\text{target}} - w_i^{\text{current}}), \quad \Delta \text{Shares}_i = \left\lfloor \frac{\Delta \text{Capital}_i}{P_i} \right\rfloor$$
+  Generates discrete `BUY`, `SELL`, and `HOLD` order tickets with estimated execution values.
+- **Dynamic Stress Testing**: Simulates immediate portfolio drawdown against historical liquidity shocks (2008 GFC, 2020 COVID, 2022 Tech Rate Hike).
 
 ---
 
-## 7. Module 5: Financial Transformer NLP & Trade Signal Classifier
-
-Market movements are frequently catalyzed by unstructured text (earnings call transcripts, regulatory filings, central bank statements).
-
-### 1. ProsusAI FinBERT Sentiment Analysis
-FinSight AI integrates `ProsusAI/finbert`, a specialized BERT language model fine-tuned on the Financial PhraseBank:
-$$P(\text{sentiment} \in \{\text{positive}, \text{negative}, \text{neutral}\} \mid \text{headline})$$
-Articles are scored with polarity indices ranging from $-1.0$ (Extremely Bearish) to $+1.0$ (Extremely Bullish).
-
-### 2. Multi-Factor Trade Signal Classifier
-A Random Forest ensemble combines quantitative technical indicators with NLP sentiment:
-- Features: RSI(14), MACD Histogram, Bollinger Band %B, Realized Volatility(20), FinBERT Mean Sentiment, Sentiment Dispersion.
-- **Platt Probability Calibration**: Converts raw voting ratios into true calibrated posterior probabilities $P(\text{Up} \mid X)$ via logistic sigmoid fitting.
-- **Normalized Feature Importances**: Gini feature importances are normalized strictly to sum to $100.0\%$.
+### 3.5 Financial Transformer NLP & Trade Signals (`MOD-06`)
+Synthesizes unstructured market news with technical indicators:
+- **ProsusAI FinBERT**: Fine-tuned on the Financial PhraseBank to classify financial headlines into positive, negative, and neutral sentiment:
+  $$S = p_{\text{positive}} - p_{\text{negative}} \in [-1.0, 1.0]$$
+- **Platt-Calibrated Random Forest**: Combines RSI, MACD, Bollinger Bands, Volatility, Mean Sentiment, and Sentiment Dispersion, calibrating voting majorities into true posterior probabilities:
+  $$P(\text{Up} \mid \mathbf{x}) = \frac{1}{1 + \exp(A \cdot f(\mathbf{x}) + B)}$$
+- **Feature Importance Normalization**: Gini feature importances are normalized strictly to sum to $100.0\%$.
 
 ---
 
-## 8. Module 6: Real-Time Price Breakout Alerting & Push Engine
-
-The **Alerting Engine** runs client-side in `AlertContext.tsx`, continually monitoring incoming quotes against user-configured threshold rules.
-
-### Features & Engineering:
-1. **Rule Evaluation**:
-   - `ABOVE`: Fires when $P_{\text{live}} \ge P_{\text{target}}$ and previous $P_{\text{last}} < P_{\text{target}}$.
-   - `BELOW`: Fires when $P_{\text{live}} \le P_{\text{target}}$ and previous $P_{\text{last}} > P_{\text{target}}$.
-2. **Anti-Spam Deduplication Cooldown**:
-   - Implements a strict 15-minute cooldown per ticker to prevent alert flooding during high-volatility chop.
-3. **Web Notifications API & In-App Toasts**:
-   - Dispatches native operating system desktop notifications (when permission is granted).
-   - Renders animated, dismissible floating glass toasts in the UI.
+### 3.6 Real-Time Breakout Alerts & Watchlist (`MOD-07`)
+Client-side monitoring engine evaluating live price action every 30 seconds:
+- **Bidirectional Rule Tracking**: Triggers on upper resistance breaks (`ABOVE`) and downward support breaks (`BELOW`).
+- **15-Minute Anti-Spam Cooldown**: Suppresses rapid oscillation triggers during market consolidation.
+- **Web Notifications API**: Native operating system push alerts + floating glassmorphic in-app toasts.
+- **Zero-Custody Privacy**: User alerts and watchlists persist locally in browser `localStorage`.
 
 ---
 
-## 9. Module 7: Modern Glassmorphic Frontend & High-DPI Exporters
-
-The user interface is engineered according to institutional design aesthetics, prioritizing usability, clarity, and visual excellence.
-
-### 1. Design System & Theming (`globals.css` & `ThemeContext.tsx`)
-- Curated color palette: Dark theme (Midnight slate `#080C14`, Card surface `rgba(18, 26, 43, 0.75)`, Accent cyan `#00F2FE`, Neon emerald `#10B981`, Rose `#EF4444`).
-- Comprehensive Light theme support via CSS `[data-theme="light"]` attribute tokens.
-- Glassmorphic card surfaces with subtle backdrop blur (`backdrop-filter: blur(16px)`), crisp 1px borders, and fluid hover animations.
-
-### 2. High-DPI Canvas PNG & RFC-4180 CSV Exporters (`chartExport.ts`)
-- **Canvas PNG Exporter**: Serializes SVG chart DOM elements, rasterizes them to an off-screen HTML `<canvas>` at $2\times$ Device Pixel Ratio (retina quality), and triggers instantaneous downloads.
-- **RFC-4180 CSV Exporter**: Formats multi-series historical and forecast time series into RFC-4180 compliant CSV streams with escaped headers and ISO timestamps.
-
-### 3. Provenance Badge & Error Recovery
-- Guaranteed safety: `ProvenanceBadge` will **never** display a "Live" badge if data fetch failed or is empty.
-- One-click "Use Sandbox" recovery buttons embedded inside view error banners allow instantaneous transition into exploratory mode if network or backend connectivity is interrupted.
+### 3.7 Glassmorphic Frontend & High-DPI Exporters (`MOD-08`)
+- **Next.js 14 App Router**: Zero-dependency CSS Custom Properties design token system.
+- **Dynamic Dark / Light Themes**: Persistent across sessions via `localStorage`.
+- **High-DPI Canvas 2x PNG Exporter**: Renders SVG chart DOM elements to an off-screen HTML5 `<canvas>` at $2.0\times$ device pixel ratio for retina-sharp exports.
+- **Deterministic Mulberry32 PRNG Sandbox**: Ensures 100% reproducible simulated market data when offline or in sandbox mode.
 
 ---
 
-## 10. Module 8: Cloud Infrastructure, CI/CD Pipeline & Cold-Start Resilience
-
-### 1. Dual-Cloud Architecture
-- **Frontend**: Hosted on Vercel's global edge network for near-zero latency worldwide.
-- **Backend API**: Hosted as a containerized FastAPI application on Render.
-
-### 2. Overcoming Render Free-Tier Cold Starts
-Render spins down free-tier web services after 15 minutes of inactivity. FinSight AI addresses this across three layers:
-1. **Fast Backend Warmup Endpoint (`/api/warmup`)**:
-   - Responds in $<5\text{ms}$ with `{ "status": "warm", "uptime_seconds": ... }`, bypassing all heavy model imports.
-2. **Fast-Polling UI Engine (`MarketDataContext.tsx`)**:
-   - When a cold start is detected (`BACKEND_STARTING`), client polling interval automatically accelerates from 30s down to 5s.
-   - A pulsing progress bar and real-time elapsed seconds counter reassures users during the 35–45s boot cycle.
-3. **UptimeRobot Keep-Alive Automation**:
-   - Configured HTTP HEAD/GET monitor pinging `/api/warmup` every 5 minutes, completely preventing the container from idling.
-
-### 3. GitHub Actions CI/CD Pipeline (`ci.yml`)
-On every push or pull request to `main`:
-1. **Backend Quant & API Tests**: Installs Python 3.10 dependencies and runs full `pytest tests/` test suite.
-2. **Frontend Build & Typecheck**: Compiles Next.js with TypeScript strict type validity checks.
-3. **Render Backend Deployment**: Once tests pass, automatically triggers Render's Deploy Hook via secure secret (`RENDER_DEPLOY_HOOK_URL`) and verifies live container health (`RENDER_HEALTH_URL`).
+### 3.8 DevOps & CI/CD Pipeline (`MOD-09`)
+- **Dual-Cloud Architecture**: Vercel (Frontend Edge) + Render (Containerized FastAPI Backend).
+- **Render Cold-Start Solution**:
+  1. Ultra-fast `/api/warmup` endpoint ($<5\text{ms}$ response time).
+  2. Client-side adaptive fast-polling (accelerates from 30s to 5s during waking phase).
+  3. Continuous 5-minute UptimeRobot keep-alive monitoring.
+- **GitHub Actions CI/CD (`ci.yml`)**: Automates backend tests (`pytest`), frontend build verification, and automated Render deployment via secure deploy hooks.
 
 ---
 
-## 11. Verification, Mathematical Correctness & Test Results
+## 4. Verification, Mathematical Correctness & Test Results
 
-### 1. Automated Backend Test Suite (`pytest tests/`)
+### 4.1 Automated Backend Test Suite (`pytest tests/`)
 ```text
 ============================= test session starts =============================
 platform win32 -- Python 3.10.11, pytest-9.0.2
+rootdir: C:\Dwij\StockAI\StockAI
 collected 19 items
 
 tests/test_data_integrity.py::test_backend_warmup_endpoint PASSED       [  5%]
@@ -326,7 +234,7 @@ tests/test_quant_math.py::test_stress_test_differs_by_basket PASSED     [100%]
 ```
 **Result**: 19 of 19 tests passed (100% pass rate).
 
-### 2. Frontend Production Compilation (`npm run build`)
+### 4.2 Frontend Production Compilation (`npm run build`)
 ```text
   ▲ Next.js 14.2.35
    Creating an optimized production build ...
@@ -345,12 +253,14 @@ Route (app)                              Size     First Load JS
 
 ---
 
-## 12. Future Roadmap & Conclusion
+## 5. Security, Non-Custodial Disclaimers & Regulatory Stance
 
-### Future Roadmap
-1. **Direct Broker Execution Gateway**: Integration with non-custodial Alpaca and Interactive Brokers REST APIs for one-click direct order routing.
-2. **Order Book L2 Microstructure Simulation**: Adding bid/ask spread and order book depth impact models to the PPO RL agent.
-3. **Multi-Asset Cryptographic & Commodity Expansions**: Extending covariance frontiers to Bitcoin, Ethereum, Gold, and Foreign Exchange.
+1. **Non-Custodial Architecture**: FinSight AI does not custody client funds, store private broker API keys on remote servers, or execute automated market orders directly without user confirmation.
+2. **Deterministic Sandbox Isolation**: Simulated demo data is generated purely on the client via the Mulberry32 PRNG and is strictly segregated from live financial feeds.
+3. **Regulatory Disclaimer**: All forecasts, optimizations, and trade signals generated by the platform are for informational, analytical, and research purposes only, and do not constitute direct financial advice.
 
-### Conclusion
-FinSight AI establishes a new standard for modern quantitative software. By enforcing strict data provenance, eliminating synthetic hallucinations, engineering cold-start resilience, and packaging mathematical modeling into an institutional glassmorphic interface, FinSight AI equips quantitative investors with transparent, mathematically rigorous tools to navigate modern financial markets.
+---
+
+## 6. Conclusion & Quantitative Roadmap
+
+FinSight AI establishes a new benchmark for accessible quantitative software. By enforcing strict data provenance, eliminating synthetic hallucinations, engineering cold-start resilience, and packaging mathematical modeling into an institutional glassmorphic interface, FinSight AI equips quantitative investors with transparent, mathematically rigorous tools to navigate modern financial markets.
