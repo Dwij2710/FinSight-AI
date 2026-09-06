@@ -11,12 +11,19 @@ import { TftView } from '../components/TftView';
 import { WatchlistView } from '../components/WatchlistView';
 import { AboutView } from '../components/AboutView';
 import { MarketDataProvider } from '../context/MarketDataContext';
+import { ThemeProvider } from '../context/ThemeContext';
+import { AlertProvider, useAlerts } from '../context/AlertContext';
+import { BellRing, X } from 'lucide-react';
 
 export default function Home() {
   return (
-    <MarketDataProvider>
-      <DashboardContent />
-    </MarketDataProvider>
+    <ThemeProvider>
+      <MarketDataProvider>
+        <AlertProvider>
+          <DashboardContent />
+        </AlertProvider>
+      </MarketDataProvider>
+    </ThemeProvider>
   );
 }
 
@@ -24,6 +31,7 @@ function DashboardContent() {
   const [activeTab, setActiveTab] = useState<'forecast' | 'portfolio' | 'watchlists' | 'ai' | 'rl' | 'tft' | 'about'>('forecast');
   const [ticker, setTicker] = useState('AAPL');
   const [searchInput, setSearchInput] = useState('');
+  const { activeToast, dismissToast } = useAlerts();
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -121,7 +129,7 @@ function DashboardContent() {
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
-                background: 'rgba(14, 19, 31, 0.9)',
+                background: 'var(--bg-input)',
                 border: '1px solid var(--border-subtle)',
                 borderRadius: 10,
                 padding: '4px 10px',
@@ -136,7 +144,7 @@ function DashboardContent() {
                   style={{
                     background: 'transparent',
                     border: 'none',
-                    color: '#F8FAFC',
+                    color: 'var(--text-primary)',
                     fontSize: '0.85rem',
                     outline: 'none',
                     width: 180,
@@ -174,6 +182,61 @@ function DashboardContent() {
         {activeTab === 'tft' && <TftView ticker={ticker} />}
         {activeTab === 'about' && <AboutView />}
       </main>
+
+      {/* Floating Price Alert Toast */}
+      {activeToast && (
+        <div style={{
+          position: 'fixed',
+          bottom: 24,
+          right: 24,
+          zIndex: 9999,
+          background: 'var(--bg-secondary)',
+          border: '1px solid var(--border-active)',
+          boxShadow: 'var(--shadow-lg)',
+          borderRadius: 12,
+          padding: '14px 18px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          maxWidth: 380,
+          animation: 'toastSlideIn 0.3s ease forwards'
+        }}>
+          <div style={{
+            width: 32,
+            height: 32,
+            borderRadius: '50%',
+            background: 'rgba(239, 68, 68, 0.15)',
+            color: 'var(--accent-rose)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0
+          }}>
+            <BellRing size={16} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 700, fontSize: '0.88rem', color: 'var(--text-primary)' }}>
+              Price Alert Triggered
+            </div>
+            <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: 2 }}>
+              <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--accent-cyan)' }}>{activeToast.ticker}</span> crossed target ${activeToast.targetPrice.toFixed(2)} (Live: ${activeToast.price.toFixed(2)})
+            </div>
+          </div>
+          <button
+            onClick={dismissToast}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--text-muted)',
+              cursor: 'pointer',
+              padding: 4
+            }}
+            aria-label="Dismiss alert"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
 
       {/* Footer */}
       <footer style={{

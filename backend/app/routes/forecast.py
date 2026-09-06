@@ -27,11 +27,24 @@ async def generate_forecast(req: ForecastRequest):
         start_date = req.start_date or "2023-01-01"
         end_date = req.end_date or date.today().strftime("%Y-%m-%d")
 
+        # Validate date range format and bounds
+        try:
+            parsed_start = datetime.datetime.strptime(start_date, "%Y-%m-%d").date()
+            parsed_end = datetime.datetime.strptime(end_date, "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date format. Dates must be in YYYY-MM-DD format.")
+
+        if parsed_start >= parsed_end:
+            raise HTTPException(status_code=400, detail=f"Start date ({start_date}) must precede end date ({end_date}).")
+
+        if parsed_end > date.today() + timedelta(days=2):
+            raise HTTPException(status_code=400, detail="End date cannot be in the future.")
+
         # 1. Download stock data via institutional DataFetcher (Polygon + YF fallback + caching)
         fetcher = DataFetcher()
         data = fetcher.fetch_single_ticker(ticker, start_date=start_date, end_date=end_date)
         if data.empty:
-            raise HTTPException(status_code=404, detail=f"No data found for ticker '{ticker}'.")
+            raise HTTPException(status_code=404, detail=f"No market data found for ticker '{ticker}' between {start_date} and {end_date}.")
 
         if 'Date' not in data.columns:
             data = data.reset_index()
@@ -40,15 +53,17 @@ async def generate_forecast(req: ForecastRequest):
             elif 'Date' not in data.columns:
                 data.insert(0, "Date", data.index)
 
-
         col = req.column
         if col not in data.columns:
             matching = [c for c in data.columns if 'Close' in c]
             col = matching[0] if matching else data.columns[1]
 
         data_subset = data[['Date', col]].dropna()
-        if len(data_subset) < 20:
-            raise HTTPException(status_code=400, detail="Insufficient data points for forecasting.")
+        if len(data_subset) < 30:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Insufficient trading data ({len(data_subset)} trading days) for ticker '{ticker}' between {start_date} and {end_date}. SARIMAX requires at least 30 trading days for stationarity checks and parameter convergence."
+            )
 
         series = data_subset[col].astype(float)
 

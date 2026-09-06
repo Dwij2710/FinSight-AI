@@ -115,5 +115,29 @@ class TestProductionDataIntegrity(unittest.TestCase):
         self.assertIn("attention_weights", data)
         self.assertGreater(len(data["attention_weights"]), 0)
 
+    def test_forecast_date_range_validation(self):
+        """Validates that forecast correctly validates start_date and end_date."""
+        from fastapi import HTTPException
+        # Test start_date after end_date raises 400
+        req_invalid = ForecastRequest(ticker="AAPL", start_date="2024-01-01", end_date="2023-01-01")
+        with self.assertRaises(HTTPException) as ctx:
+            asyncio.run(generate_forecast(req_invalid))
+        self.assertEqual(ctx.exception.status_code, 400)
+        self.assertIn("must precede", ctx.exception.detail)
+
+        # Test valid custom date range
+        req_valid = ForecastRequest(ticker="AAPL", start_date="2023-06-01", end_date="2024-01-01", forecast_period=5)
+        res = asyncio.run(generate_forecast(req_valid))
+        self.assertTrue(res.success)
+        self.assertGreater(len(res.data["history"]), 20)
+
+    def test_backend_warmup_endpoint(self):
+        """Validates that /api/warmup returns status 'warm'."""
+        from backend.app.main import warmup
+        res = asyncio.run(warmup())
+        self.assertEqual(res["status"], "warm")
+        self.assertEqual(res["service"], "FinSight AI API")
+        self.assertIn("uptime_seconds", res)
+
 if __name__ == "__main__":
     unittest.main()

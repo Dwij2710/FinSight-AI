@@ -22,6 +22,7 @@ interface MarketDataContextType {
   setDemoMode: (enabled: boolean) => void;
   lastUpdated: string | null;
   activeTickerPrice: (ticker: string) => number | undefined;
+  wakingStartedAt: number | null;
 }
 
 const MarketDataContext = createContext<MarketDataContextType | undefined>(undefined);
@@ -34,6 +35,7 @@ export function MarketDataProvider({ children }: { children: ReactNode }) {
   const [backendHealth, setBackendHealth] = useState<BackendHealthStatus | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [isDemoMode, setIsDemoModeState] = useState<boolean>(false);
+  const [wakingStartedAt, setWakingStartedAt] = useState<number | null>(null);
 
   // Initialize demo mode state from localStorage if explicitly set
   useEffect(() => {
@@ -61,7 +63,11 @@ export function MarketDataProvider({ children }: { children: ReactNode }) {
           setFreshnessState('DEMO_SIMULATION');
         } else {
           setFreshnessState('BACKEND_STARTING');
+          setWakingStartedAt(prev => prev || Date.now());
         }
+        return;
+      } else {
+        setWakingStartedAt(null);
       }
 
       // 2. Fetch live quotes for default watchlist
@@ -87,17 +93,21 @@ export function MarketDataProvider({ children }: { children: ReactNode }) {
       console.warn('[MarketDataProvider] Quote synchronization failed:', err);
       if (isDemoMode) {
         setFreshnessState('DEMO_SIMULATION');
+      } else if (!backendHealth?.online) {
+        setFreshnessState('BACKEND_STARTING');
       } else {
         setFreshnessState('PROVIDER_ERROR');
       }
     }
-  }, [isDemoMode]);
+  }, [isDemoMode, backendHealth?.online]);
 
   useEffect(() => {
     refreshQuotes();
-    const interval = setInterval(refreshQuotes, 20000); // 20s polling
+    // Fast 5s polling when waking up, 20s when live
+    const pollInterval = freshnessState === 'BACKEND_STARTING' ? 5000 : 20000;
+    const interval = setInterval(refreshQuotes, pollInterval);
     return () => clearInterval(interval);
-  }, [refreshQuotes]);
+  }, [refreshQuotes, freshnessState]);
 
   const getQuote = (ticker: string): LiveTickerQuote | undefined => {
     const clean = ticker.trim().toUpperCase();
@@ -120,6 +130,7 @@ export function MarketDataProvider({ children }: { children: ReactNode }) {
         isDemoMode,
         setDemoMode,
         lastUpdated,
+        wakingStartedAt,
         activeTickerPrice
       }}
     >

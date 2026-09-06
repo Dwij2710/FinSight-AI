@@ -74,8 +74,8 @@ export function TickerBanner({ activeTicker, onSelectTicker }: TickerBannerProps
 
   return (
     <div style={{
-      background: 'rgba(5, 7, 12, 0.95)',
-      borderBottom: '1px solid rgba(255, 255, 255, 0.07)',
+      background: 'var(--bg-secondary)',
+      borderBottom: '1px solid var(--border-subtle)',
       padding: '7px 24px',
       fontSize: '0.78rem',
       display: 'flex',
@@ -95,8 +95,8 @@ export function TickerBanner({ activeTicker, onSelectTicker }: TickerBannerProps
           display: 'flex',
           alignItems: 'center',
           gap: 6,
-          background: 'rgba(255, 255, 255, 0.03)',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border-subtle)',
           borderRadius: 6,
           padding: '2px 8px',
           fontSize: '0.72rem',
@@ -111,7 +111,7 @@ export function TickerBanner({ activeTicker, onSelectTicker }: TickerBannerProps
             animation: nyseOpen ? 'pulse 2s infinite ease-in-out' : 'none'
           }} />
           <span style={{ color: 'var(--text-muted)' }}>NYSE:</span>
-          <span style={{ color: nyseOpen ? '#34D399' : '#9CA3AF' }}>{nyseOpen ? 'Open' : 'Closed'}</span>
+          <span style={{ color: nyseOpen ? '#10B981' : 'var(--text-muted)' }}>{nyseOpen ? 'Open' : 'Closed'}</span>
         </div>
 
         {/* NSE Status */}
@@ -119,8 +119,8 @@ export function TickerBanner({ activeTicker, onSelectTicker }: TickerBannerProps
           display: 'flex',
           alignItems: 'center',
           gap: 6,
-          background: 'rgba(255, 255, 255, 0.03)',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border-subtle)',
           borderRadius: 6,
           padding: '2px 8px',
           fontSize: '0.72rem',
@@ -135,7 +135,7 @@ export function TickerBanner({ activeTicker, onSelectTicker }: TickerBannerProps
             animation: nseOpen ? 'pulse 2s infinite ease-in-out' : 'none'
           }} />
           <span style={{ color: 'var(--text-muted)' }}>NSE:</span>
-          <span style={{ color: nseOpen ? '#34D399' : '#9CA3AF' }}>{nseOpen ? 'Open' : 'Closed'}</span>
+          <span style={{ color: nseOpen ? '#10B981' : 'var(--text-muted)' }}>{nseOpen ? 'Open' : 'Closed'}</span>
         </div>
       </div>
 

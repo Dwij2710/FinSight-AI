@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
-import { TrendingUp, RefreshCw, AlertTriangle, ShieldCheck, Database, Radio } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { TrendingUp, RefreshCw, AlertTriangle, ShieldCheck, Database, Radio, Sun, Moon } from 'lucide-react';
 import { TickerBanner } from './TickerBanner';
 import { useMarketData } from '../context/MarketDataContext';
+import { useTheme } from '../context/ThemeContext';
 
 export function Header({
   activeTicker,
@@ -18,10 +19,27 @@ export function Header({
     refreshQuotes,
     isDemoMode,
     setDemoMode,
-    lastUpdated
+    lastUpdated,
+    wakingStartedAt
   } = useMarketData();
 
+  const { isDark, toggleTheme } = useTheme();
   const [refreshing, setRefreshing] = useState(false);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (freshnessState === 'BACKEND_STARTING' && wakingStartedAt) {
+      const updateElapsed = () => {
+        setElapsedSeconds(Math.max(1, Math.round((Date.now() - wakingStartedAt) / 1000)));
+      };
+      updateElapsed();
+      timer = setInterval(updateElapsed, 1000);
+    } else {
+      setElapsedSeconds(0);
+    }
+    return () => clearInterval(timer);
+  }, [freshnessState, wakingStartedAt]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -152,7 +170,30 @@ export function Header({
           </div>
 
           {/* Backend Connectivity Status & Sandbox Controls */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            {/* Theme Toggle */}
+            <button
+              onClick={toggleTheme}
+              title={`Switch to ${isDark ? 'Light' : 'Dark'} Mode`}
+              style={{
+                background: 'rgba(255, 255, 255, 0.04)',
+                border: '1px solid var(--border-subtle)',
+                color: 'var(--text-secondary)',
+                borderRadius: 20,
+                padding: '5px 11px',
+                fontSize: '0.72rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                fontWeight: 500,
+                transition: 'all 0.2s'
+              }}
+            >
+              {isDark ? <Sun size={12} color="#F59E0B" /> : <Moon size={12} color="#8B5CF6" />}
+              <span>{isDark ? 'Light' : 'Dark'}</span>
+            </button>
+
             {/* Demo Sandbox Toggle */}
             <button
               onClick={() => setDemoMode(!isDemoMode)}
@@ -213,33 +254,55 @@ export function Header({
         <div style={{
           background: 'rgba(245, 158, 11, 0.12)',
           borderBottom: '1px solid rgba(245, 158, 11, 0.35)',
-          padding: '8px 24px',
+          padding: '10px 24px',
           fontSize: '0.8rem',
           display: 'flex',
+          flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          gap: 12,
+          gap: 6,
           color: '#FDE68A'
         }}>
-          <AlertTriangle size={15} color="#F59E0B" />
-          <span>
-            <strong>Connecting to live financial API:</strong> If the cloud backend is cold-starting, please allow ~30–45s for the container to initialize.
-          </span>
-          <button
-            onClick={handleRefresh}
-            style={{
-              background: '#F59E0B',
-              color: '#080B11',
-              border: 'none',
-              borderRadius: 6,
-              padding: '2px 10px',
-              fontSize: '0.75rem',
-              fontWeight: 700,
-              cursor: 'pointer'
-            }}
-          >
-            Retry Now
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <AlertTriangle size={15} color="#F59E0B" />
+            <span>
+              <strong>Connecting to live financial API:</strong> Cloud backend is initializing from idle cold-start.
+              {elapsedSeconds > 0 && (
+                <span style={{ marginLeft: 6, color: '#F59E0B', fontFamily: 'var(--font-mono)' }}>
+                  ({elapsedSeconds}s elapsed · typically ~35-45s)
+                </span>
+              )}
+            </span>
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              style={{
+                background: '#F59E0B',
+                color: '#080B11',
+                border: 'none',
+                borderRadius: 6,
+                padding: '3px 12px',
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5
+              }}
+            >
+              <RefreshCw size={11} className={refreshing ? 'spin' : ''} />
+              <span>Retry Probe</span>
+            </button>
+          </div>
+          {/* Progress bar estimation */}
+          <div style={{ width: '100%', maxWidth: 480, height: 4, background: 'rgba(245, 158, 11, 0.2)', borderRadius: 2, overflow: 'hidden' }}>
+            <div style={{
+              width: `${Math.min(95, Math.max(8, (elapsedSeconds / 45) * 100))}%`,
+              height: '100%',
+              background: 'linear-gradient(90deg, #F59E0B 0%, #00F2FE 100%)',
+              transition: 'width 1s linear'
+            }} />
+          </div>
         </div>
       )}
 

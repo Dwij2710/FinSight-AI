@@ -270,3 +270,16 @@ export interface Watchlist {
   items: WatchlistItem[];
 }
 
+export type ThemeMode = 'dark' | 'light' | 'system';
+
+export interface PriceAlert {
+  id: string;
+  ticker: string;
+  targetPrice: number;
+  condition: 'ABOVE' | 'BELOW';
+  enabled: boolean;
+  createdAt: string;
+  lastTriggered?: string;
+  status: 'ACTIVE' | 'TRIGGERED';
+}
+

@@ -1,6 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
+import { Download, Camera, FileSpreadsheet } from 'lucide-react';
+import { exportChartSvgToPng, exportSeriesToCsv } from '../../lib/chartExport';
+import { useTheme } from '../../context/ThemeContext';
 
 // ==================== MULTI-LINE / FORECAST CHART ====================
 export interface ChartSeries {
@@ -16,15 +19,19 @@ export function MultiLineChart({
   series,
   confidenceBounds,
   height = 340,
-  title
+  title,
+  exportable = true
 }: {
   dates: string[];
   series: ChartSeries[];
   confidenceBounds?: { lower: (number | null)[]; upper: (number | null)[]; color?: string };
   height?: number;
   title?: string;
+  exportable?: boolean;
 }) {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+  const { isDark } = useTheme();
 
   if (!dates || dates.length === 0 || !series || series.length === 0) {
     return <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B' }}>No data to display</div>;
@@ -90,23 +97,95 @@ export function MultiLineChart({
     return { y: getY(val), val };
   });
 
+  const handleExportPng = () => {
+    exportChartSvgToPng(svgRef.current, `${title || 'chart'}_${dates[dates.length - 1] || 'export'}`, !isDark, title);
+  };
+
+  const handleExportCsv = () => {
+    const headers = ['Date', ...series.map(s => s.name)];
+    if (confidenceBounds) {
+      headers.push('Lower 95% Bound', 'Upper 95% Bound');
+    }
+    const rows = dates.map((d, i) => {
+      const row: (string | number | null)[] = [d];
+      series.forEach(s => row.push(s.data[i] !== undefined ? s.data[i] : null));
+      if (confidenceBounds) {
+        row.push(confidenceBounds.lower[i] !== undefined ? confidenceBounds.lower[i] : null);
+        row.push(confidenceBounds.upper[i] !== undefined ? confidenceBounds.upper[i] : null);
+      }
+      return row;
+    });
+    exportSeriesToCsv(`${title || 'chart_dataset'}_${dates[dates.length - 1] || 'export'}`, headers, rows);
+  };
+
   return (
     <div style={{ width: '100%', position: 'relative' }}>
-      {title && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <h4 style={{ fontSize: '1rem', color: '#F8FAFC' }}>{title}</h4>
-          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 10 }}>
+        <div>
+          {title && <h4 style={{ fontSize: '1rem', color: 'var(--text-primary)', margin: 0 }}>{title}</h4>}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+          {/* Series Legends */}
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             {series.map(s => (
-              <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', color: '#94A3B8' }}>
+              <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
                 <span style={{ width: 12, height: 3, background: s.color, display: 'inline-block', borderRadius: 2 }} />
                 <span>{s.name}</span>
               </div>
             ))}
           </div>
+
+          {/* Export Toolbar */}
+          {exportable && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, borderLeft: '1px solid var(--border-subtle)', paddingLeft: 10 }}>
+              <button
+                onClick={handleExportCsv}
+                title="Export Chart Data as CSV"
+                style={{
+                  background: 'rgba(255, 255, 255, 0.04)',
+                  border: '1px solid var(--border-subtle)',
+                  color: 'var(--text-muted)',
+                  borderRadius: 6,
+                  padding: '3px 8px',
+                  fontSize: '0.72rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+              >
+                <FileSpreadsheet size={12} />
+                <span>CSV</span>
+              </button>
+
+              <button
+                onClick={handleExportPng}
+                title="Export Chart as High-Res PNG"
+                style={{
+                  background: 'rgba(255, 255, 255, 0.04)',
+                  border: '1px solid var(--border-subtle)',
+                  color: 'var(--text-muted)',
+                  borderRadius: 6,
+                  padding: '3px 8px',
+                  fontSize: '0.72rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+              >
+                <Camera size={12} />
+                <span>PNG</span>
+              </button>
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       <svg
+        ref={svgRef}
         viewBox={`0 0 ${width} ${height}`}
         style={{ width: '100%', height, overflow: 'visible', userSelect: 'none' }}
         onMouseLeave={() => setHoverIndex(null)}
@@ -126,14 +205,14 @@ export function MultiLineChart({
               y1={g.y}
               x2={width - padRight}
               y2={g.y}
-              stroke="rgba(255, 255, 255, 0.07)"
+              stroke={isDark ? "rgba(255, 255, 255, 0.07)" : "rgba(15, 23, 42, 0.08)"}
               strokeDasharray="3 3"
             />
             <text
               x={padLeft - 10}
               y={g.y + 4}
               textAnchor="end"
-              fill="#64748B"
+              fill={isDark ? "#64748B" : "#475569"}
               fontSize="10"
               fontFamily="var(--font-mono)"
             >
@@ -240,23 +319,23 @@ export function MultiLineChart({
           position: 'absolute',
           top: 10,
           right: 20,
-          background: 'rgba(14, 19, 31, 0.95)',
-          border: '1px solid rgba(0, 242, 254, 0.3)',
+          background: isDark ? 'rgba(14, 19, 31, 0.95)' : 'rgba(255, 255, 255, 0.98)',
+          border: isDark ? '1px solid rgba(0, 242, 254, 0.3)' : '1px solid rgba(2, 132, 199, 0.35)',
           borderRadius: 8,
           padding: '8px 12px',
-          boxShadow: '0 4px 15px rgba(0,0,0,0.5)',
+          boxShadow: isDark ? '0 4px 15px rgba(0,0,0,0.5)' : '0 4px 15px rgba(15, 23, 42, 0.12)',
           pointerEvents: 'none',
           fontSize: '0.8rem',
           zIndex: 10
         }}>
-          <div style={{ color: '#94A3B8', fontWeight: 600, marginBottom: 4 }}>{dates[hoverIndex]}</div>
+          <div style={{ color: isDark ? '#94A3B8' : '#64748B', fontWeight: 600, marginBottom: 4 }}>{dates[hoverIndex]}</div>
           {series.map(s => {
             const val = s.data[hoverIndex];
             if (val === null || isNaN(val)) return null;
             return (
               <div key={s.name} style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
                 <span style={{ color: s.color }}>{s.name}:</span>
-                <span style={{ color: '#F8FAFC', fontFamily: 'var(--font-mono)' }}>{val.toFixed(2)}</span>
+                <span style={{ color: isDark ? '#F8FAFC' : '#0F172A', fontFamily: 'var(--font-mono)' }}>{val.toFixed(2)}</span>
               </div>
             );
           })}

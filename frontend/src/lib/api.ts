@@ -177,26 +177,41 @@ async function fetchWithDiagnostics(
   url: string,
   init: RequestInit,
   timeoutMs: number,
-  operationName: string
+  operationName: string,
+  retries: number = 1
 ): Promise<Response> {
-  try {
-    return await fetch(url, {
-      ...init,
-      signal: AbortSignal.timeout(timeoutMs)
-    });
-  } catch (err: any) {
-    if (err.name === 'TimeoutError' || err.message?.includes('timeout') || err.name === 'AbortError') {
+  let lastErr: any = null;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      if (attempt > 0) {
+        await new Promise(r => setTimeout(r, 1500 * Math.pow(2, attempt - 1)));
+      }
+      return await fetch(url, {
+        ...init,
+        signal: AbortSignal.timeout(timeoutMs)
+      });
+    } catch (err: any) {
+      lastErr = err;
+      if (err.name !== 'TimeoutError' && !err.message?.includes('timeout') && err.name !== 'AbortError' && err.message !== 'Failed to fetch' && err.name !== 'TypeError') {
+        break;
+      }
+    }
+  }
+
+  if (lastErr) {
+    if (lastErr.name === 'TimeoutError' || lastErr.message?.includes('timeout') || lastErr.name === 'AbortError') {
       throw new Error(
         `Request timed out while connecting to FinSight backend (${operationName}). If hosted on Render free tier, the backend spins down when inactive (~45s wake-up time). Please click Retry.`
       );
     }
-    if (err.message === 'Failed to fetch' || err.name === 'TypeError') {
+    if (lastErr.message === 'Failed to fetch' || lastErr.name === 'TypeError') {
       throw new Error(
         `Cannot connect to FinSight AI API backend at ${API_BASE_URL}. The server is currently offline or spinning up. If running locally, verify with 'uvicorn backend.app.main:app --port 8000'.`
       );
     }
-    throw new Error(`${operationName} request failed: ${err?.message || 'Network error'}`);
+    throw new Error(`${operationName} request failed: ${lastErr?.message || 'Network error'}`);
   }
+  throw new Error(`${operationName} failed without response.`);
 }
 
 async function handleResponse(res: Response, fallbackMessage: string) {

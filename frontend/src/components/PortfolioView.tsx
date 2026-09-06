@@ -7,6 +7,7 @@ import { getPortfolioOptimization, listSavedPortfolios, savePortfolio, deleteSav
 import { MultiLineChart, CorrelationHeatmap, AllocationBars } from './Common/Charts';
 import { ErrorBanner } from './Common/ErrorBanner';
 import { ProvenanceBadge } from './ProvenanceBadge';
+import { RebalanceModal } from './RebalanceModal';
 
 export function PortfolioView() {
   const defaultTickers = 'RELIANCE.NS, TCS.NS, HDFCBANK.NS, INFY.NS, ICICIBANK.NS';
@@ -17,9 +18,10 @@ export function PortfolioView() {
   const [isDemo, setIsDemo] = useState(false);
   const [activeStrategy, setActiveStrategy] = useState<'sharpe' | 'vol' | 'parity'>('sharpe');
 
-  // Persistence state
+  // Persistence & Rebalance state
   const [savedPortfolios, setSavedPortfolios] = useState<SavedPortfolio[]>([]);
   const [showSaveModal, setShowSaveModal] = useState(false);
+  const [showRebalanceModal, setShowRebalanceModal] = useState(false);
   const [newPortfolioName, setNewPortfolioName] = useState('');
   const [newPortfolioDesc, setNewPortfolioDesc] = useState('');
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
@@ -562,13 +564,24 @@ export function PortfolioView() {
               </div>
             </div>
 
-            <button
-              onClick={() => setShowSaveModal(true)}
-              className="btn-secondary"
-              style={{ fontSize: '0.78rem', padding: '6px 14px' }}
-            >
-              Lock Allocation
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <button
+                onClick={() => setShowRebalanceModal(true)}
+                className="btn-primary"
+                style={{ fontSize: '0.8rem', padding: '7px 16px', display: 'flex', alignItems: 'center', gap: 6 }}
+              >
+                <Activity size={14} />
+                <span>Generate Rebalance Plan</span>
+              </button>
+
+              <button
+                onClick={() => setShowSaveModal(true)}
+                className="btn-secondary"
+                style={{ fontSize: '0.8rem', padding: '7px 14px' }}
+              >
+                Lock Allocation
+              </button>
+            </div>
           </div>
 
           {/* Holdings Breakdown Table */}
@@ -598,8 +611,8 @@ export function PortfolioView() {
                 </thead>
                 <tbody>
                   {Object.entries(activeWeights).map(([sym, targetWeight]) => {
-                    const baseline = baselineWeight * 100;
-                    const target = targetWeight * 100;
+                    const baseline = baselineWeight > 1.0 ? baselineWeight : baselineWeight * 100;
+                    const target = targetWeight > 1.0 ? targetWeight : targetWeight * 100;
                     const delta = target - baseline;
                     const action = delta > 3
                       ? 'Accumulate'
@@ -742,6 +755,14 @@ export function PortfolioView() {
           </div>
         </>
       )}
+
+      {/* Rebalance Execution Plan Modal */}
+      <RebalanceModal
+        isOpen={showRebalanceModal}
+        onClose={() => setShowRebalanceModal(false)}
+        activeWeights={activeWeights}
+        strategyName={activeStrategy === 'sharpe' ? 'Max Sharpe' : activeStrategy === 'vol' ? 'Min Volatility' : 'Risk Parity'}
+      />
     </div>
   );
 }

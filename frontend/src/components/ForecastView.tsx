@@ -22,12 +22,44 @@ export function ForecastView({ ticker }: { ticker: string }) {
   const [forecastDays, setForecastDays] = useState(14);
   const [runBacktest, setRunBacktest] = useState(true);
 
+  // Date Range Controls
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const oneYearAgoStr = (() => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 1);
+    return d.toISOString().slice(0, 10);
+  })();
+
+  const [startDate, setStartDate] = useState(oneYearAgoStr);
+  const [endDate, setEndDate] = useState(todayStr);
+  const [datePreset, setDatePreset] = useState<'6M' | '1Y' | '2Y' | '5Y' | 'custom'>('1Y');
+
+  const setPreset = (preset: '6M' | '1Y' | '2Y' | '5Y') => {
+    setDatePreset(preset);
+    const d = new Date();
+    if (preset === '6M') d.setMonth(d.getMonth() - 6);
+    else if (preset === '1Y') d.setFullYear(d.getFullYear() - 1);
+    else if (preset === '2Y') d.setFullYear(d.getFullYear() - 2);
+    else if (preset === '5Y') d.setFullYear(d.getFullYear() - 5);
+    setStartDate(d.toISOString().slice(0, 10));
+    setEndDate(todayStr);
+  };
+
+  const isDateRangeValid = startDate < endDate && endDate <= todayStr;
+
   const runModel = async () => {
+    if (!isDateRangeValid) {
+      setError('Invalid date range: Start date must be before end date and not in the future.');
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
       const res = await getForecast({
         ticker,
+        start_date: startDate,
+        end_date: endDate,
         p,
         d,
         q,
@@ -230,11 +262,11 @@ export function ForecastView({ ticker }: { ticker: string }) {
       )}
 
       {/* Main Panel & Controls Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 300px', gap: 24, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 24, alignItems: 'start' }}>
         {/* Visualizer Panel */}
         <div className="glass-panel" style={{ minHeight: 460 }}>
           {/* Sub Tab Switcher */}
-          <div style={{ display: 'flex', gap: 8, marginBottom: 20, borderBottom: '1px solid var(--border-subtle)', paddingBottom: 12 }}>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 20, borderBottom: '1px solid var(--border-subtle)', paddingBottom: 12, overflowX: 'auto' }}>
             <button
               onClick={() => setActiveSubTab('forecast')}
               style={{
@@ -245,7 +277,8 @@ export function ForecastView({ ticker }: { ticker: string }) {
                 borderRadius: 8,
                 fontSize: '0.85rem',
                 fontWeight: 600,
-                cursor: 'pointer'
+                cursor: 'pointer',
+                whiteSpace: 'nowrap'
               }}
             >
               📈 Price Forecast
@@ -260,7 +293,8 @@ export function ForecastView({ ticker }: { ticker: string }) {
                 borderRadius: 8,
                 fontSize: '0.85rem',
                 fontWeight: 600,
-                cursor: 'pointer'
+                cursor: 'pointer',
+                whiteSpace: 'nowrap'
               }}
             >
               🔬 Decomposition (Trend/Season)
@@ -275,101 +309,229 @@ export function ForecastView({ ticker }: { ticker: string }) {
                 borderRadius: 8,
                 fontSize: '0.85rem',
                 fontWeight: 600,
-                cursor: 'pointer'
+                cursor: 'pointer',
+                whiteSpace: 'nowrap'
               }}
             >
-              🎯 Backtest Validation
+              🎯 Hold-Out Backtest Validation
             </button>
           </div>
 
-          {loading ? (
-            <div style={{ height: 350, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-              <div className="pulse-dot" style={{ width: 14, height: 14, background: 'var(--accent-cyan)' }} />
-              <div style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Training SARIMAX & fitting curves...</div>
-            </div>
-          ) : data ? (
-            activeSubTab === 'forecast' ? (
-              <div>
+          {/* Sub Views Content */}
+          {activeSubTab === 'forecast' && (
+            <MultiLineChart
+              dates={allDates}
+              series={[
+                { name: 'Actual Price', color: '#00F2FE', data: actualSeries, strokeWidth: 2 },
+                { name: 'Fitted SARIMAX', color: '#8B5CF6', data: fittedSeries, dash: true },
+                { name: `Forecast (${forecastDays}D)`, color: '#10B981', data: futureSeries, strokeWidth: 2.5 }
+              ]}
+              confidenceBounds={{
+                lower: lowerBounds,
+                upper: upperBounds,
+                color: '#00F2FE'
+              }}
+              title={`${ticker} Quantitative Price Trajectory`}
+              height={360}
+            />
+          )}
+
+          {activeSubTab === 'decomp' && (
+            data?.decomposition && data.decomposition.trend && data.decomposition.trend.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                 <MultiLineChart
-                  title={`${ticker} Actual History vs Model Fit vs Future Forecast`}
-                  dates={allDates}
-                  height={380}
+                  dates={data.decomposition.dates || historyDates}
                   series={[
-                    { name: 'Actual Price', color: '#3B82F6', data: actualSeries, strokeWidth: 2 },
-                    { name: 'Model Fit', color: '#10B981', data: fittedSeries, dash: true, strokeWidth: 1.5 },
-                    { name: 'Future Prediction', color: '#00F2FE', data: futureSeries, strokeWidth: 2.5 }
+                    { name: 'Underlying Trend', color: '#00F2FE', data: data.decomposition.trend || [], strokeWidth: 2 }
                   ]}
-                  confidenceBounds={{ lower: lowerBounds, upper: upperBounds }}
+                  title="Underlying Macro Trend Component (Centered Moving Average)"
+                  height={190}
                 />
-                <div style={{ marginTop: 20, display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                  <span>* Shaded cyan area represents 95% forecast confidence interval.</span>
-                  <span>* Model auto-regularized against overfitting.</span>
-                </div>
+                <MultiLineChart
+                  dates={data.decomposition.dates || historyDates}
+                  series={[
+                    { name: 'Seasonal Cycle', color: '#8B5CF6', data: data.decomposition.seasonal || [] }
+                  ]}
+                  title="Cyclical Seasonal Component"
+                  height={150}
+                />
+                <MultiLineChart
+                  dates={data.decomposition.dates || historyDates}
+                  series={[
+                    { name: 'Residual Noise', color: '#F43F5E', data: data.decomposition.resid || [] }
+                  ]}
+                  title="Stationary Residual Noise Component"
+                  height={150}
+                />
               </div>
-            ) : activeSubTab === 'decomp' ? (
-              data.decomposition && data.decomposition.trend && data.decomposition.trend.length > 0 ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-                  <MultiLineChart
-                    title="Underlying Macro Trend"
-                    dates={data.decomposition.dates?.slice(-100) || []}
-                    height={150}
-                    series={[{ name: 'Trend', color: '#00F2FE', data: data.decomposition.trend?.slice(-100) || [] }]}
-                  />
-                  <MultiLineChart
-                    title="Seasonal Cycles"
-                    dates={data.decomposition.dates?.slice(-100) || []}
-                    height={120}
-                    series={[{ name: 'Seasonality', color: '#10B981', data: data.decomposition.seasonal?.slice(-100) || [] }]}
-                  />
-                  <MultiLineChart
-                    title="Residual Noise"
-                    dates={data.decomposition.dates?.slice(-100) || []}
-                    height={120}
-                    series={[{ name: 'Residual', color: '#F43F5E', data: data.decomposition.resid?.slice(-100) || [], dash: true }]}
-                  />
-                </div>
-              ) : (
-                <div className="glass-panel" style={{ textAlign: 'center', padding: 40, color: 'var(--text-secondary)' }}>
-                  <Info size={32} style={{ marginBottom: 12, opacity: 0.6 }} />
-                  <h4 style={{ color: '#F8FAFC', marginBottom: 6 }}>Seasonal Decomposition Unavailable</h4>
-                  <p style={{ fontSize: '0.88rem', maxWidth: 460, margin: '8px auto 0' }}>
-                    {data.decomposition?.error || 'Seasonal decomposition requires at least 2 complete seasonal cycles (24+ trading days) of price history.'}
-                  </p>
-                </div>
-              )
             ) : (
-              data.backtest && data.backtest.actual && data.backtest.actual.length > 0 ? (
-                <div>
-                  <div style={{ display: 'flex', gap: 20, marginBottom: 16 }}>
-                    <div className="badge badge-emerald">Backtest Accuracy: {data.backtest.accuracy.toFixed(1)}%</div>
-                    <div className="badge badge-purple">Hold-Out RMSE: ${data.backtest.rmse.toFixed(2)}</div>
-                  </div>
-                  <MultiLineChart
-                    title="Out-of-Sample 30-Day Blind Backtest"
-                    dates={data.backtest.dates}
-                    height={320}
-                    series={[
-                      { name: 'Real Actual Price', color: '#3B82F6', data: data.backtest.actual, strokeWidth: 2.5 },
-                      { name: 'Model Blind Prediction', color: '#F43F5E', data: data.backtest.predicted, dash: true, strokeWidth: 2 }
-                    ]}
-                  />
-                </div>
-              ) : (
-                <div className="glass-panel" style={{ textAlign: 'center', padding: 40, color: 'var(--text-secondary)' }}>
-                  <Info size={32} style={{ marginBottom: 12, opacity: 0.6 }} />
-                  <h4 style={{ color: '#F8FAFC', marginBottom: 6 }}>Hold-Out Backtest Validation Unavailable</h4>
-                  <p style={{ fontSize: '0.88rem', maxWidth: 460, margin: '8px auto 0' }}>
-                    {data.backtest?.error || 'Hold-out backtest validation requires at least 40 trading days of historical data for blind testing.'}
-                  </p>
-                </div>
-              )
+              <div className="glass-panel" style={{ textAlign: 'center', padding: 40, color: 'var(--text-secondary)' }}>
+                <Info size={32} style={{ marginBottom: 12, opacity: 0.6 }} />
+                <h4 style={{ color: '#F8FAFC', marginBottom: 6 }}>Seasonal Decomposition Unavailable</h4>
+                <p style={{ fontSize: '0.88rem', maxWidth: 460, margin: '8px auto 0' }}>
+                  {data?.decomposition?.error || 'Decomposition requires at least 2 seasonal cycles (24 trading observations) to isolate cyclical momentum.'}
+                </p>
+              </div>
             )
-          ) : null}
+          )}
+
+          {activeSubTab === 'backtest' && (
+            data?.backtest && data.backtest.actual && data.backtest.actual.length > 0 ? (
+              <div>
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  background: 'rgba(255, 255, 255, 0.03)',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: 10,
+                  padding: '10px 16px',
+                  marginBottom: 16,
+                  flexWrap: 'wrap',
+                  gap: 12
+                }}>
+                  <div>
+                    <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Holdout Accuracy</span>
+                    <div style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--accent-emerald)', fontFamily: 'var(--font-mono)' }}>
+                      {data.backtest.accuracy.toFixed(1)}%
+                    </div>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Validation RMSE</span>
+                    <div style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--accent-cyan)', fontFamily: 'var(--font-mono)' }}>
+                      ${data.backtest.rmse.toFixed(2)}
+                    </div>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Validation MAPE</span>
+                    <div style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--accent-purple)', fontFamily: 'var(--font-mono)' }}>
+                      {data.backtest.mape.toFixed(2)}%
+                    </div>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Test Window</span>
+                    <div style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                      {data.backtest.dates.length} Days Blind
+                    </div>
+                  </div>
+                </div>
+
+                <MultiLineChart
+                  dates={data.backtest.dates}
+                  series={[
+                    { name: 'Actual Price (Blind Test)', color: '#00F2FE', data: data.backtest.actual, strokeWidth: 2 },
+                    { name: 'Model Prediction', color: '#10B981', data: data.backtest.predicted, dash: true, strokeWidth: 2 }
+                  ]}
+                  title="Blind Hold-Out Validation: Actual vs Out-of-Sample Predictions"
+                  height={320}
+                />
+              </div>
+            ) : (
+              <div className="glass-panel" style={{ textAlign: 'center', padding: 40, color: 'var(--text-secondary)' }}>
+                <Info size={32} style={{ marginBottom: 12, opacity: 0.6 }} />
+                <h4 style={{ color: '#F8FAFC', marginBottom: 6 }}>Hold-Out Backtest Validation Unavailable</h4>
+                <p style={{ fontSize: '0.88rem', maxWidth: 460, margin: '8px auto 0' }}>
+                  {data?.backtest?.error || 'Hold-out backtest validation requires at least 40 trading days of historical data for blind testing.'}
+                </p>
+              </div>
+            )
+          )}
         </div>
 
-        {/* Hyperparameter Controls Sidebar */}
-        <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-          <h3 style={{ fontSize: '1.1rem', borderBottom: '1px solid var(--border-subtle)', paddingBottom: 10 }}>
+        {/* Hyperparameter & Date Horizon Controls Sidebar */}
+        <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 360, width: '100%' }}>
+          {/* Historical Training Horizon */}
+          <div>
+            <h3 style={{ fontSize: '1.05rem', borderBottom: '1px solid var(--border-subtle)', paddingBottom: 8, marginBottom: 12 }}>
+              Historical Date Horizon
+            </h3>
+
+            {/* Quick Presets */}
+            <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+              {(['6M', '1Y', '2Y', '5Y'] as const).map(p => (
+                <button
+                  key={p}
+                  onClick={() => setPreset(p)}
+                  style={{
+                    flex: 1,
+                    background: datePreset === p ? 'rgba(0, 242, 254, 0.15)' : 'rgba(255, 255, 255, 0.04)',
+                    border: datePreset === p ? '1px solid var(--accent-cyan)' : '1px solid var(--border-subtle)',
+                    color: datePreset === p ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+                    borderRadius: 6,
+                    padding: '5px 0',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+
+            {/* Date Inputs */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.74rem', color: 'var(--text-muted)', marginBottom: 3 }}>
+                  START DATE
+                </label>
+                <input
+                  type="date"
+                  value={startDate}
+                  max={endDate}
+                  onChange={e => {
+                    setStartDate(e.target.value);
+                    setDatePreset('custom');
+                  }}
+                  style={{
+                    width: '100%',
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-subtle)',
+                    color: 'var(--text-primary)',
+                    borderRadius: 6,
+                    padding: '6px 10px',
+                    fontSize: '0.8rem',
+                    fontFamily: 'var(--font-mono)'
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.74rem', color: 'var(--text-muted)', marginBottom: 3 }}>
+                  END DATE
+                </label>
+                <input
+                  type="date"
+                  value={endDate}
+                  max={todayStr}
+                  min={startDate}
+                  onChange={e => {
+                    setEndDate(e.target.value);
+                    setDatePreset('custom');
+                  }}
+                  style={{
+                    width: '100%',
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-subtle)',
+                    color: 'var(--text-primary)',
+                    borderRadius: 6,
+                    padding: '6px 10px',
+                    fontSize: '0.8rem',
+                    fontFamily: 'var(--font-mono)'
+                  }}
+                />
+              </div>
+            </div>
+
+            {!isDateRangeValid && (
+              <span style={{ fontSize: '0.72rem', color: '#EF4444', display: 'block', marginTop: 4 }}>
+                Start date must be before end date.
+              </span>
+            )}
+          </div>
+
+          <h3 style={{ fontSize: '1.05rem', borderBottom: '1px solid var(--border-subtle)', paddingBottom: 8, marginTop: 4 }}>
             Model Hyperparameters
           </h3>
 
@@ -437,7 +599,7 @@ export function ForecastView({ ticker }: { ticker: string }) {
 
           <button
             onClick={runModel}
-            disabled={loading}
+            disabled={loading || !isDateRangeValid}
             className="btn-primary"
             style={{ width: '100%', marginTop: 8 }}
           >

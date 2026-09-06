@@ -85,6 +85,16 @@ from src.data_fetcher import get_last_data_fetch_ts, is_yfinance_reachable
 
 _START_TIME = datetime.utcnow()
 
+@app.get("/api/warmup")
+async def warmup():
+    uptime = (datetime.utcnow() - _START_TIME).total_seconds()
+    return {
+        "status": "warm",
+        "service": "FinSight AI API",
+        "uptime_seconds": round(uptime, 1),
+        "timestamp": datetime.utcnow().isoformat() + "Z"
+    }
+
 @app.get("/health")
 async def health_check():
     uptime = (datetime.utcnow() - _START_TIME).total_seconds()
