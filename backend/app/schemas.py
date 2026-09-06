@@ -92,7 +92,7 @@ class SignalRequest(BaseModel):
 
 # ==================== RL AGENT SCHEMAS ====================
 class RlSimulateRequest(BaseModel):
-    ticker: str = Field("AAPL", min_length=1, max_length=20, pattern=TICKER_REGEX)
+    ticker: str = Field(..., min_length=1, max_length=20, pattern=TICKER_REGEX, description="Stock ticker symbol (required)")
     start_date: Optional[str] = Field("2022-01-01", pattern=DATE_REGEX)
     end_date: Optional[str] = Field(None, pattern=DATE_REGEX)
     initial_balance: Optional[float] = Field(10000.0, ge=100)
@@ -108,7 +108,7 @@ class RlSimulateRequest(BaseModel):
 
 # ==================== TFT / MULTI-FACTOR REGIME SCHEMAS ====================
 class TftRequest(BaseModel):
-    ticker: str = Field("AAPL", min_length=1, max_length=20, pattern=TICKER_REGEX)
+    ticker: str = Field(..., min_length=1, max_length=20, pattern=TICKER_REGEX, description="Stock ticker symbol (required)")
     stress_scenarios: Optional[Dict[str, float]] = Field(default=None)
 
     @field_validator('ticker')
@@ -391,4 +391,27 @@ class AlertEvaluateResponse(BaseModel):
     evaluated_count: int
     triggered_count: int
     triggered_events: List[AlertTriggerEvent]
+
+# ==================== TICKER SEARCH & VALIDATION SCHEMAS ====================
+class TickerSearchResult(BaseModel):
+    symbol: str
+    name: str
+    exchange: str
+    asset_type: str = "Equity"
+    sector: Optional[str] = None
+    industry: Optional[str] = None
+
+class TickerSearchResponse(BaseModel):
+    query: str
+    total: int
+    results: List[TickerSearchResult]
+
+class TickerValidationResponse(BaseModel):
+    symbol: str
+    is_valid: bool
+    name: Optional[str] = None
+    exchange: Optional[str] = None
+    currency: Optional[str] = None
+    data_available: bool = False
+    message: Optional[str] = None
 

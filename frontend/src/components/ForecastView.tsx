@@ -49,6 +49,64 @@ export function ForecastView({ ticker }: { ticker: string }) {
 
   const isDateRangeValid = startDate < endDate && endDate <= todayStr;
 
+  useEffect(() => {
+    let isCurrent = true;
+    const currentTicker = ticker.trim().toUpperCase();
+
+    // Reset previous stock data immediately to prevent showing stale results
+    setData(null);
+    setError(null);
+    setLoading(true);
+
+    const executeRun = async () => {
+      if (!isDateRangeValid) {
+        if (isCurrent) {
+          setError('Invalid date range: Start date must be before end date and not in the future.');
+          setLoading(false);
+        }
+        return;
+      }
+
+      try {
+        const res = await getForecast({
+          ticker: currentTicker,
+          start_date: startDate,
+          end_date: endDate,
+          p,
+          d,
+          q,
+          forecast_period: forecastDays,
+          run_backtest: runBacktest
+        });
+
+        if (!isCurrent) return;
+
+        // Discard response if user already switched to another ticker
+        if (res.data?.ticker && res.data.ticker.toUpperCase() !== currentTicker) {
+          return;
+        }
+
+        setData(res.data);
+        setIsDemo(!!res.isDemo);
+      } catch (err: any) {
+        if (isCurrent) {
+          setError(err?.message || `SARIMAX quantitative forecast failed for ${currentTicker}.`);
+          setData(null);
+        }
+      } finally {
+        if (isCurrent) {
+          setLoading(false);
+        }
+      }
+    };
+
+    executeRun();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [ticker, isDemoMode, startDate, endDate, p, d, q, forecastDays, runBacktest]);
+
   const runModel = async () => {
     if (!isDateRangeValid) {
       setError('Invalid date range: Start date must be before end date and not in the future.');
@@ -57,9 +115,10 @@ export function ForecastView({ ticker }: { ticker: string }) {
 
     setLoading(true);
     setError(null);
+    const currentTicker = ticker.trim().toUpperCase();
     try {
       const res = await getForecast({
-        ticker,
+        ticker: currentTicker,
         start_date: startDate,
         end_date: endDate,
         p,
@@ -68,19 +127,18 @@ export function ForecastView({ ticker }: { ticker: string }) {
         forecast_period: forecastDays,
         run_backtest: runBacktest
       });
+      if (res.data?.ticker && res.data.ticker.toUpperCase() !== currentTicker) {
+        return;
+      }
       setData(res.data);
       setIsDemo(!!res.isDemo);
     } catch (err: any) {
-      setError(err?.message || 'SARIMAX quantitative forecast failed.');
+      setError(err?.message || `SARIMAX quantitative forecast failed for ${currentTicker}.`);
       setData(null);
     } finally {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    runModel();
-  }, [ticker, isDemoMode]);
 
   // Derive price metrics
   const lastActual = data?.history && data.history.length > 0
@@ -221,6 +279,43 @@ export function ForecastView({ ticker }: { ticker: string }) {
           suggestedAction="Verify that the ticker symbol exists or switch to Sandbox Mode to test the UI."
           onSwitchToSandbox={() => setDemoMode(true)}
         />
+      )}
+
+      {/* Loading Transition Indicator */}
+      {loading && !data && (
+        <div
+          className="glass-panel"
+          style={{
+            padding: '36px 24px',
+            textAlign: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 12
+          }}
+        >
+          <div
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: '50%',
+              background: 'rgba(0, 242, 254, 0.12)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'var(--accent-cyan)'
+            }}
+          >
+            <TrendingUp size={22} />
+          </div>
+          <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '1rem' }}>
+            Computing SARIMAX Quantitative Forecast for <span style={{ color: 'var(--accent-cyan)', fontFamily: 'var(--font-mono)' }}>{ticker}</span>...
+          </div>
+          <div style={{ color: 'var(--text-secondary)', fontSize: '0.82rem' }}>
+            Fitting autoregressive polynomials, calculating confidence intervals, and running holdout backtest.
+          </div>
+        </div>
       )}
 
       {/* Metrics Row */}

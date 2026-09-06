@@ -286,8 +286,29 @@ export function WatchlistView({
                           transition: 'background 0.2s'
                         }}
                       >
-                        <td style={{ padding: '14px', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--accent-cyan)' }}>
-                          {item.ticker}
+                        <td
+                          onClick={() => onSelectTicker(item.ticker)}
+                          style={{
+                            padding: '14px',
+                            fontWeight: 700,
+                            fontFamily: 'var(--font-mono)',
+                            color: 'var(--accent-cyan)',
+                            cursor: 'pointer'
+                          }}
+                          title={`Click to analyze ${item.ticker} in Terminal`}
+                        >
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            padding: '3px 8px',
+                            borderRadius: 6,
+                            background: 'rgba(0, 242, 254, 0.08)',
+                            border: '1px solid rgba(0, 242, 254, 0.2)',
+                            transition: 'all 0.2s'
+                          }}>
+                            {item.ticker}
+                          </span>
                         </td>
                         <td style={{ padding: '14px' }}>
                           {quote ? (

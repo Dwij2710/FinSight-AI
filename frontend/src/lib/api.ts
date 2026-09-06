@@ -28,7 +28,8 @@ import {
   generateDemoFundamentals,
   generateDemoPaperAccount,
   executeDemoPaperOrder,
-  resetDemoPaperAccount
+  resetDemoPaperAccount,
+  searchDemoTickers
 } from './demoData';
 import {
   TickerHistoryData,
@@ -46,7 +47,10 @@ import {
   StrategyBacktestParams,
   StrategyBacktestResult,
   StressMacroShockParams,
-  StressTestResponseData
+  StressTestResponseData,
+  TickerSearchResult,
+  TickerSearchResponse,
+  TickerValidationResult
 } from './types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
@@ -1362,6 +1366,87 @@ export async function runPortfolioStressTest(params: StressMacroShockParams): Pr
       };
     }
     throw err;
+  }
+}
+
+// ==================== UNIVERSAL TICKER SEARCH (SEARCH-01) ====================
+export async function searchTickers(query: string): Promise<TickerSearchResult[]> {
+  const q = query.trim();
+  if (!q) return [];
+
+  if (isExplicitDemoMode()) {
+    return searchDemoTickers(q);
+  }
+
+  try {
+    const res = await fetchWithDiagnostics(
+      `${API_BASE_URL}/api/ticker/search?q=${encodeURIComponent(q)}`,
+      {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store'
+      },
+      8000,
+      `Ticker search for ${q}`,
+      1
+    );
+    const json = await res.json();
+    if (json && json.success && json.data && Array.isArray(json.data.results)) {
+      return json.data.results;
+    }
+    return searchDemoTickers(q);
+  } catch (err: any) {
+    return searchDemoTickers(q);
+  }
+}
+
+export async function validateTicker(ticker: string): Promise<TickerValidationResult> {
+  const sym = ticker.trim().toUpperCase();
+  if (!sym) {
+    return { symbol: '', is_valid: false, data_available: false, message: 'Ticker is required.' };
+  }
+
+  if (isExplicitDemoMode()) {
+    return {
+      symbol: sym,
+      is_valid: true,
+      data_available: true,
+      name: `${sym} Corp.`,
+      exchange: 'NASDAQ',
+      currency: 'USD',
+      message: 'Validated in sandbox demo mode.'
+    };
+  }
+
+  try {
+    const res = await fetchWithDiagnostics(
+      `${API_BASE_URL}/api/ticker/validate/${encodeURIComponent(sym)}`,
+      {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store'
+      },
+      8000,
+      `Validate ticker ${sym}`,
+      1
+    );
+    const json = await res.json();
+    if (json && json.data) {
+      return json.data;
+    }
+    return {
+      symbol: sym,
+      is_valid: Boolean(json?.success),
+      data_available: Boolean(json?.success),
+      message: json?.message || 'Validation response received.'
+    };
+  } catch (err: any) {
+    return {
+      symbol: sym,
+      is_valid: false,
+      data_available: false,
+      message: err?.message || `Failed to validate ticker ${sym}`
+    };
   }
 }
 

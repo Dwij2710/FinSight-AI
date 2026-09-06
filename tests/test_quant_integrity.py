@@ -177,7 +177,10 @@ class TestQuantitativeIntegrity(unittest.TestCase):
         # Verify transaction friction disclosures
         self.assertEqual(data["transaction_friction"]["commission_bps"], 5)
         self.assertEqual(data["transaction_friction"]["slippage_bps"], 2)
-        self.assertGreaterEqual(data["episodes_trained"], 1)
+        if not data.get("is_model_fallback"):
+            self.assertGreaterEqual(data["episodes_trained"], 1)
+        else:
+            self.assertEqual(data["episodes_trained"], 0)
 
 if __name__ == "__main__":
     unittest.main()

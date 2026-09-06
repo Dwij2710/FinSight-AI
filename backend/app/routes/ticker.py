@@ -6,10 +6,18 @@ Guarantees 100% real, validated market data with honest freshness disclosure.
 from fastapi import APIRouter, Query, HTTPException, Path
 from typing import List, Dict, Any, Optional
 import datetime
+import re
 import numpy as np
 import pandas as pd
 import yfinance as yf
-from ..schemas import ApiResponse, CanonicalQuote
+from ..schemas import (
+    ApiResponse,
+    CanonicalQuote,
+    TickerSearchResult,
+    TickerSearchResponse,
+    TickerValidationResponse,
+    TICKER_REGEX
+)
 from ..services.market_data import market_data_service
 from ..services.cache import CacheService
 
@@ -17,6 +25,221 @@ router = APIRouter(prefix="/api/ticker", tags=["Ticker"])
 cache_service = CacheService.get_instance()
 
 DEFAULT_WATCHLIST = ["SPY", "QQQ", "AAPL", "NVDA", "MSFT", "RELIANCE.NS", "TCS.NS", "^NSEI"]
+
+# Authoritative high-volume in-memory securities directory for sub-millisecond instant autocomplete
+POPULAR_DIRECTORY: List[Dict[str, str]] = [
+    {"symbol": "AAPL", "name": "Apple Inc.", "exchange": "NASDAQ", "asset_type": "Equity", "sector": "Technology"},
+    {"symbol": "MSFT", "name": "Microsoft Corporation", "exchange": "NASDAQ", "asset_type": "Equity", "sector": "Technology"},
+    {"symbol": "NVDA", "name": "NVIDIA Corporation", "exchange": "NASDAQ", "asset_type": "Equity", "sector": "Technology"},
+    {"symbol": "TSLA", "name": "Tesla, Inc.", "exchange": "NASDAQ", "asset_type": "Equity", "sector": "Consumer Cyclical"},
+    {"symbol": "GOOGL", "name": "Alphabet Inc. (Class A)", "exchange": "NASDAQ", "asset_type": "Equity", "sector": "Communication Services"},
+    {"symbol": "GOOG", "name": "Alphabet Inc. (Class C)", "exchange": "NASDAQ", "asset_type": "Equity", "sector": "Communication Services"},
+    {"symbol": "AMZN", "name": "Amazon.com, Inc.", "exchange": "NASDAQ", "asset_type": "Equity", "sector": "Consumer Cyclical"},
+    {"symbol": "META", "name": "Meta Platforms, Inc.", "exchange": "NASDAQ", "asset_type": "Equity", "sector": "Communication Services"},
+    {"symbol": "NFLX", "name": "Netflix, Inc.", "exchange": "NASDAQ", "asset_type": "Equity", "sector": "Communication Services"},
+    {"symbol": "AMD", "name": "Advanced Micro Devices, Inc.", "exchange": "NASDAQ", "asset_type": "Equity", "sector": "Technology"},
+    {"symbol": "INTC", "name": "Intel Corporation", "exchange": "NASDAQ", "asset_type": "Equity", "sector": "Technology"},
+    {"symbol": "JPM", "name": "JPMorgan Chase & Co.", "exchange": "NYSE", "asset_type": "Equity", "sector": "Financial Services"},
+    {"symbol": "BAC", "name": "Bank of America Corp.", "exchange": "NYSE", "asset_type": "Equity", "sector": "Financial Services"},
+    {"symbol": "WMT", "name": "Walmart Inc.", "exchange": "NYSE", "asset_type": "Equity", "sector": "Consumer Defensive"},
+    {"symbol": "DIS", "name": "The Walt Disney Company", "exchange": "NYSE", "asset_type": "Equity", "sector": "Communication Services"},
+    {"symbol": "COST", "name": "Costco Wholesale Corporation", "exchange": "NASDAQ", "asset_type": "Equity", "sector": "Consumer Defensive"},
+    {"symbol": "SPY", "name": "SPDR S&P 500 ETF Trust", "exchange": "NYSE Arca", "asset_type": "ETF", "sector": "Index ETF"},
+    {"symbol": "QQQ", "name": "Invesco QQQ Trust", "exchange": "NASDAQ", "asset_type": "ETF", "sector": "Index ETF"},
+    {"symbol": "IWM", "name": "iShares Russell 2000 ETF", "exchange": "NYSE Arca", "asset_type": "ETF", "sector": "Small Cap ETF"},
+    {"symbol": "TLT", "name": "iShares 20+ Year Treasury Bond ETF", "exchange": "NASDAQ", "asset_type": "ETF", "sector": "Fixed Income"},
+    {"symbol": "GLD", "name": "SPDR Gold Shares", "exchange": "NYSE Arca", "asset_type": "ETF", "sector": "Commodity"},
+    {"symbol": "RELIANCE.NS", "name": "Reliance Industries Limited", "exchange": "NSE", "asset_type": "Equity", "sector": "Energy"},
+    {"symbol": "TCS.NS", "name": "Tata Consultancy Services Ltd.", "exchange": "NSE", "asset_type": "Equity", "sector": "Technology"},
+    {"symbol": "HDFCBANK.NS", "name": "HDFC Bank Limited", "exchange": "NSE", "asset_type": "Equity", "sector": "Financial Services"},
+    {"symbol": "INFY.NS", "name": "Infosys Limited", "exchange": "NSE", "asset_type": "Equity", "sector": "Technology"},
+    {"symbol": "ICICIBANK.NS", "name": "ICICI Bank Limited", "exchange": "NSE", "asset_type": "Equity", "sector": "Financial Services"},
+    {"symbol": "SBIN.NS", "name": "State Bank of India", "exchange": "NSE", "asset_type": "Equity", "sector": "Financial Services"},
+    {"symbol": "BHARTIARTL.NS", "name": "Bharti Airtel Limited", "exchange": "NSE", "asset_type": "Equity", "sector": "Communication Services"},
+    {"symbol": "TATAMOTORS.NS", "name": "Tata Motors Limited", "exchange": "NSE", "asset_type": "Equity", "sector": "Auto Manufacturers"},
+    {"symbol": "WIPRO.NS", "name": "Wipro Limited", "exchange": "NSE", "asset_type": "Equity", "sector": "Technology"}
+]
+
+@router.get("/search", response_model=ApiResponse)
+async def search_tickers(
+    q: str = Query(..., min_length=1, max_length=50, description="Ticker symbol or company name query")
+):
+    """
+    Universal securities search endpoint with autocomplete and company name resolution.
+    Blends instant local high-volume securities directory with live Yahoo Finance Search fallback.
+    Results are cached server-side (3600s TTL). Never returns fake stocks.
+    """
+    query_str = q.strip()
+    if not query_str:
+        return ApiResponse(
+            success=True,
+            data_source="cache",
+            freshness="realtime",
+            fetched_at=datetime.datetime.utcnow().isoformat() + "Z",
+            data=TickerSearchResponse(query="", total=0, results=[]).model_dump()
+        )
+
+    q_upper = query_str.upper()
+    q_lower = query_str.lower()
+    cache_key = f"finsight:search:{q_upper}"
+    cached = cache_service.get_sync(cache_key)
+    if cached:
+        return ApiResponse(
+            success=True,
+            data_source="cache",
+            freshness="cached",
+            fetched_at=datetime.datetime.utcnow().isoformat() + "Z",
+            data=cached
+        )
+
+    matched_symbols = set()
+    results: List[TickerSearchResult] = []
+
+    # 1. Fast match against curated local directory
+    for item in POPULAR_DIRECTORY:
+        sym = item["symbol"]
+        name = item["name"]
+        if sym == q_upper or sym.startswith(q_upper) or q_lower in name.lower():
+            if sym not in matched_symbols:
+                matched_symbols.add(sym)
+                results.append(TickerSearchResult(
+                    symbol=sym,
+                    name=name,
+                    exchange=item["exchange"],
+                    asset_type=item["asset_type"],
+                    sector=item.get("sector")
+                ))
+
+    # 2. Live provider search fallback for comprehensive global symbol resolution
+    try:
+        yf_search = yf.Search(query_str, max_results=10)
+        quotes = getattr(yf_search, "quotes", [])
+        for quote in quotes:
+            sym = quote.get("symbol")
+            if not sym or not isinstance(sym, str):
+                continue
+            sym = sym.strip().upper()
+            if sym in matched_symbols:
+                continue
+
+            name = quote.get("shortname") or quote.get("longname") or sym
+            exch = quote.get("exchDisp") or quote.get("exchange") or "UNKNOWN"
+            asset_t = quote.get("typeDisp") or quote.get("quoteType") or "Equity"
+            sector = quote.get("sectorDisp") or quote.get("sector")
+
+            matched_symbols.add(sym)
+            results.append(TickerSearchResult(
+                symbol=sym,
+                name=name,
+                exchange=exch,
+                asset_type=asset_t,
+                sector=sector
+            ))
+    except Exception:
+        # If live yfinance search times out or errors, continue with local results
+        pass
+
+    # Sort results: Exact symbol match first, then starts with symbol, then alphabetical
+    def sort_key(item: TickerSearchResult):
+        if item.symbol == q_upper:
+            return 0
+        if item.symbol.startswith(q_upper):
+            return 1
+        return 2
+
+    results.sort(key=sort_key)
+    top_results = results[:12]
+
+    response_data = TickerSearchResponse(
+        query=query_str,
+        total=len(top_results),
+        results=top_results
+    ).model_dump()
+
+    cache_service.set_sync(cache_key, response_data, ttl_seconds=3600)
+
+    now_ts = datetime.datetime.utcnow().isoformat() + "Z"
+    return ApiResponse(
+        success=True,
+        data_source="yfinance",
+        freshness="realtime",
+        fetched_at=now_ts,
+        data=response_data
+    )
+
+@router.get("/validate/{ticker}", response_model=ApiResponse)
+async def validate_ticker(ticker: str = Path(..., description="Stock ticker symbol to validate")):
+    """
+    Validates whether a ticker symbol exists, is supported by market data providers,
+    and has active trading data.
+    """
+    sym = ticker.strip().upper()
+    if not re.match(TICKER_REGEX, sym):
+        return ApiResponse(
+            success=False,
+            data=TickerValidationResponse(
+                symbol=sym,
+                is_valid=False,
+                data_available=False,
+                message=f"Invalid ticker format: '{ticker}'. Ticker symbols must contain alphanumeric characters, dots, or hyphens."
+            ).model_dump()
+        )
+
+    try:
+        quote = market_data_service.get_quote(sym)
+        if quote and quote.price > 0:
+            return ApiResponse(
+                success=True,
+                data_source=quote.data_source,
+                freshness=quote.freshness,
+                fetched_at=datetime.datetime.utcnow().isoformat() + "Z",
+                data=TickerValidationResponse(
+                    symbol=sym,
+                    is_valid=True,
+                    name=quote.name,
+                    exchange=quote.exchange,
+                    currency=quote.currency,
+                    data_available=True,
+                    message="Security validated successfully."
+                ).model_dump()
+            )
+    except Exception:
+        pass
+
+    # Fallback verification check
+    try:
+        ticker_obj = yf.Ticker(sym)
+        fast_info = getattr(ticker_obj, "fast_info", None)
+        last_price = getattr(fast_info, "last_price", None) if fast_info else None
+        if last_price is not None and not np.isnan(last_price) and last_price > 0:
+            currency = getattr(fast_info, "currency", "USD")
+            exchange = getattr(fast_info, "exchange", "UNKNOWN")
+            return ApiResponse(
+                success=True,
+                data_source="yfinance",
+                freshness="realtime",
+                fetched_at=datetime.datetime.utcnow().isoformat() + "Z",
+                data=TickerValidationResponse(
+                    symbol=sym,
+                    is_valid=True,
+                    exchange=exchange,
+                    currency=currency,
+                    data_available=True,
+                    message="Security validated successfully via provider fast-info."
+                ).model_dump()
+            )
+    except Exception:
+        pass
+
+    return ApiResponse(
+        success=False,
+        data=TickerValidationResponse(
+            symbol=sym,
+            is_valid=False,
+            data_available=False,
+            message=f"We couldn't find a supported security for '{sym}'."
+        ).model_dump()
+    )
 
 @router.get("/live", response_model=ApiResponse)
 async def get_live_tickers(tickers: Optional[str] = Query(None, description="Comma-separated ticker list")):

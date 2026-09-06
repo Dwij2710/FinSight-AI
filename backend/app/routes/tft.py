@@ -13,9 +13,11 @@ if _PROJECT_ROOT not in sys.path:
 from src.tft_features import MultiVariateDataFetcher, MultiFactorRegimeModel
 from ..schemas import TftRequest, ApiResponse
 from ..services.market_data import market_data_service
+from ..services.cache import CacheService
 from ..utils.serializer import sanitize_for_json
 
 router = APIRouter(tags=["Multi-Factor Macro Regime"])
+cache_service = CacheService.get_instance()
 
 @router.post("/api/tft/analyze", response_model=ApiResponse)
 @router.post("/api/multifactor/analyze", response_model=ApiResponse)
@@ -24,6 +26,17 @@ async def analyze_tft(req: TftRequest):
         ticker = req.ticker.strip().upper()
         if not ticker:
             raise HTTPException(status_code=400, detail="Ticker is required.")
+
+        cache_key = f"finsight:multifactor:{ticker}"
+        cached = cache_service.get_sync(cache_key)
+        if cached:
+            return ApiResponse(
+                success=True,
+                data_source="cache",
+                freshness="cached",
+                fetched_at=datetime.datetime.utcnow().isoformat() + "Z",
+                data=cached
+            )
 
         fetcher = MultiVariateDataFetcher(ticker)
         data = fetcher.fetch_data()
@@ -85,47 +98,50 @@ async def analyze_tft(req: TftRequest):
         chart_series = {col: [round(float(v), 2) for v in norm_recent[col]] for col in norm_recent.columns}
 
         now_ts = datetime.datetime.utcnow().isoformat() + "Z"
+        response_payload = sanitize_for_json({
+            "ticker": ticker,
+            "current_price": round(current_price, 2),
+            "sp500_price": round(sp_val, 2),
+            "vix": round(vix_val, 2),
+            "regime": regime,
+            "regime_desc": regime_desc,
+            "data_source": "live",
+            "fetched_at": now_ts,
+            "model_architecture": "Multi-Factor Macro Regime & Quantile Gradient Boosting Regressor (Pinball Loss)",
+            "factor_attributions": [
+                {"factor": k, "weight_pct": round(float(v * 100), 2), "method": "MDI"}
+                for k, v in attention_weights.items()
+            ],
+            "attention_weights": [
+                {"factor": k, "weight_pct": round(float(v * 100), 2)}
+                for k, v in attention_weights.items()
+            ],
+            "anomaly_analysis": {
+                "is_anomaly": anomaly_data.get('is_anomaly', False),
+                "risk_score": round(float(anomaly_data.get('risk_score', 0.0)), 1),
+                "message": anomaly_data.get('message', ''),
+                "scanned_at": now_ts
+            },
+            "lookalike": lookalike_data,
+            "probabilistic_forecast": prob_forecast,
+            "scenarios": scenario_results,
+            "macro_correlations": macro_corrs,
+            "macro_chart": {
+                "dates": chart_dates,
+                "series": chart_series
+            }
+        })
+
+        cache_service.set_sync(cache_key, response_payload, ttl_seconds=300)
+
         return ApiResponse(
             success=True,
             data_source="live",
             fetched_at=now_ts,
-            data=sanitize_for_json({
-                "ticker": ticker,
-                "current_price": round(current_price, 2),
-                "sp500_price": round(sp_val, 2),
-                "vix": round(vix_val, 2),
-                "regime": regime,
-                "regime_desc": regime_desc,
-                "data_source": "live",
-                "fetched_at": now_ts,
-                "model_architecture": "Multi-Factor Macro Regime & Quantile Gradient Boosting Regressor (Pinball Loss)",
-                "factor_attributions": [
-                    {"factor": k, "weight_pct": round(float(v * 100), 2), "method": "MDI"}
-                    for k, v in attention_weights.items()
-                ],
-                "attention_weights": [
-                    {"factor": k, "weight_pct": round(float(v * 100), 2)}
-                    for k, v in attention_weights.items()
-                ],
-                "anomaly_analysis": {
-                    "is_anomaly": anomaly_data.get('is_anomaly', False),
-                    "risk_score": round(float(anomaly_data.get('risk_score', 0.0)), 1),
-                    "message": anomaly_data.get('message', ''),
-                    "scanned_at": now_ts
-                },
-                "lookalike": lookalike_data,
-                "probabilistic_forecast": prob_forecast,
-                "scenarios": scenario_results,
-                "macro_correlations": macro_corrs,
-                "macro_chart": {
-                    "dates": chart_dates,
-                    "series": chart_series
-                }
-            })
+            data=response_payload
         )
 
     except HTTPException:
         raise
     except Exception as e:
-        import traceback
-        return ApiResponse(success=False, message=f"TFT analysis failed: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Multi-Factor Macro analysis failed for {ticker}: {str(e)}")

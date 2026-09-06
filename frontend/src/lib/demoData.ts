@@ -19,7 +19,8 @@ import {
   PaperPositionItem,
   PaperTradeItem,
   PaperAccountData,
-  PaperOrderPayload
+  PaperOrderPayload,
+  TickerSearchResult
 } from './types';
 
 // ==================== DETERMINISTIC PRNG UTILITIES ====================
@@ -1386,6 +1387,32 @@ export function resetDemoPaperAccount(): PaperAccountData {
   _demoPaperPositions = [];
   _demoPaperTrades = [];
   return generateDemoPaperAccount();
+}
+
+export function searchDemoTickers(query: string): TickerSearchResult[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  const demoUniverse: TickerSearchResult[] = [
+    { symbol: 'AAPL', name: 'Apple Inc.', exchange: 'NASDAQ', asset_type: 'Equity', sector: 'Technology' },
+    { symbol: 'MSFT', name: 'Microsoft Corporation', exchange: 'NASDAQ', asset_type: 'Equity', sector: 'Technology' },
+    { symbol: 'NVDA', name: 'NVIDIA Corporation', exchange: 'NASDAQ', asset_type: 'Equity', sector: 'Technology' },
+    { symbol: 'TSLA', name: 'Tesla, Inc.', exchange: 'NASDAQ', asset_type: 'Equity', sector: 'Consumer Cyclical' },
+    { symbol: 'GOOGL', name: 'Alphabet Inc. (Class A)', exchange: 'NASDAQ', asset_type: 'Equity', sector: 'Communication Services' },
+    { symbol: 'AMZN', name: 'Amazon.com, Inc.', exchange: 'NASDAQ', asset_type: 'Equity', sector: 'Consumer Cyclical' },
+    { symbol: 'META', name: 'Meta Platforms, Inc.', exchange: 'NASDAQ', asset_type: 'Equity', sector: 'Communication Services' },
+    { symbol: 'NFLX', name: 'Netflix, Inc.', exchange: 'NASDAQ', asset_type: 'Equity', sector: 'Communication Services' },
+    { symbol: 'AMD', name: 'Advanced Micro Devices', exchange: 'NASDAQ', asset_type: 'Equity', sector: 'Technology' },
+    { symbol: 'INTC', name: 'Intel Corporation', exchange: 'NASDAQ', asset_type: 'Equity', sector: 'Technology' },
+    { symbol: 'SPY', name: 'SPDR S&P 500 ETF Trust', exchange: 'NYSE Arca', asset_type: 'ETF', sector: 'Index ETF' },
+    { symbol: 'QQQ', name: 'Invesco QQQ Trust', exchange: 'NASDAQ', asset_type: 'ETF', sector: 'Index ETF' },
+    { symbol: 'RELIANCE.NS', name: 'Reliance Industries Limited', exchange: 'NSE', asset_type: 'Equity', sector: 'Energy' },
+    { symbol: 'TCS.NS', name: 'Tata Consultancy Services Ltd.', exchange: 'NSE', asset_type: 'Equity', sector: 'Technology' },
+    { symbol: 'HDFCBANK.NS', name: 'HDFC Bank Limited', exchange: 'NSE', asset_type: 'Equity', sector: 'Financial Services' },
+    { symbol: 'INFY.NS', name: 'Infosys Limited', exchange: 'NSE', asset_type: 'Equity', sector: 'Technology' }
+  ];
+  return demoUniverse.filter(item =>
+    item.symbol.toLowerCase().includes(q) || item.name.toLowerCase().includes(q)
+  );
 }
 
 

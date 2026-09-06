@@ -16,24 +16,64 @@ export function TftView({ ticker }: { ticker: string }) {
   const [error, setError] = useState<string | null>(null);
   const [isDemo, setIsDemo] = useState(false);
 
+  useEffect(() => {
+    let isCurrent = true;
+    const currentTicker = ticker.trim().toUpperCase();
+
+    // Reset previous stock data immediately to prevent showing stale results
+    setData(null);
+    setError(null);
+    setLoading(true);
+
+    const executeFetch = async () => {
+      try {
+        const res = await analyzeTft(currentTicker);
+        if (!isCurrent) return;
+
+        // Discard response if user already switched to another ticker
+        if (res.data?.ticker && res.data.ticker.toUpperCase() !== currentTicker) {
+          return;
+        }
+
+        setData(res.data);
+        setIsDemo(Boolean(res.isDemo));
+      } catch (err: any) {
+        if (isCurrent) {
+          setError(err?.message || `Failed to compute multivariate factor regime model for ${currentTicker}.`);
+          setData(null);
+        }
+      } finally {
+        if (isCurrent) {
+          setLoading(false);
+        }
+      }
+    };
+
+    executeFetch();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [ticker, isDemoMode]);
+
   const fetchTft = async () => {
     setLoading(true);
     setError(null);
+    const currentTicker = ticker.trim().toUpperCase();
     try {
-      const res = await analyzeTft(ticker);
+      const res = await analyzeTft(currentTicker);
+      if (res.data?.ticker && res.data.ticker.toUpperCase() !== currentTicker) {
+        return;
+      }
       setData(res.data);
       setIsDemo(Boolean(res.isDemo));
     } catch (err: any) {
-      setError(err?.message || 'Failed to compute multivariate factor regime model.');
+      setError(err?.message || `Failed to compute multivariate factor regime model for ${currentTicker}.`);
       setData(null);
     } finally {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    fetchTft();
-  }, [ticker, isDemoMode]);
 
   // Key event annotations for factor attention weights
   const factorAnnotations: Record<string, string> = {
@@ -100,6 +140,43 @@ export function TftView({ ticker }: { ticker: string }) {
           suggestedAction="Ensure the backend service is running, or switch to Sandbox Mode."
           onSwitchToSandbox={() => setDemoMode(true)}
         />
+      )}
+
+      {/* Loading Transition Indicator */}
+      {loading && !data && (
+        <div
+          className="glass-panel"
+          style={{
+            padding: '36px 24px',
+            textAlign: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 12
+          }}
+        >
+          <div
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: '50%',
+              background: 'rgba(0, 242, 254, 0.12)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'var(--accent-cyan)'
+            }}
+          >
+            <Globe size={22} />
+          </div>
+          <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '1rem' }}>
+            Computing Macro Multi-Factor Regime for <span style={{ color: 'var(--accent-cyan)', fontFamily: 'var(--font-mono)' }}>{ticker}</span>...
+          </div>
+          <div style={{ color: 'var(--text-secondary)', fontSize: '0.82rem' }}>
+            Attributing S&P 500 beta, VIX volatility shifts, 10Y Yields, Crude Oil, and Gold safe-haven flows.
+          </div>
+        </div>
       )}
 
       {/* Top Regime & Macro State Bar */}

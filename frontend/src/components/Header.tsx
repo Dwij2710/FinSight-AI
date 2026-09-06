@@ -8,13 +8,23 @@ import { useTheme } from '../context/ThemeContext';
 import { useAlerts } from '../context/AlertContext';
 import { AlertCenterModal } from './Alerts/AlertCenterModal';
 
+import { useTicker } from '../context/TickerContext';
+import { UniversalTickerSearch } from './Common/UniversalTickerSearch';
+
 export function Header({
-  activeTicker,
-  onSelectTicker
+  activeTicker: propActiveTicker,
+  onSelectTicker: propOnSelectTicker
 }: {
-  activeTicker: string;
-  onSelectTicker: (t: string) => void;
-}) {
+  activeTicker?: string;
+  onSelectTicker?: (t: string) => void;
+} = {}) {
+  const { activeTicker: ctxActiveTicker, setActiveTicker, popularTickers } = useTicker();
+  const activeTicker = propActiveTicker || ctxActiveTicker;
+  const handleSelect = (t: string) => {
+    setActiveTicker(t);
+    if (propOnSelectTicker) propOnSelectTicker(t);
+  };
+
   const {
     backendHealth,
     freshnessState,
@@ -54,8 +64,6 @@ export function Header({
     await refreshQuotes();
     setRefreshing(false);
   };
-
-  const popularTickers = ['AAPL', 'NVDA', 'MSFT', 'TSLA', 'RELIANCE.NS', 'TCS.NS'];
 
   const getStatusDisplay = () => {
     if (isDemoMode) {
@@ -152,29 +160,34 @@ export function Header({
             </div>
           </div>
 
-          {/* Quick Ticker Select */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 500 }}>Markets:</span>
-            {popularTickers.map(t => (
-              <button
-                key={t}
-                onClick={() => onSelectTicker(t)}
-                style={{
-                  background: activeTicker === t ? 'rgba(0, 242, 254, 0.15)' : 'rgba(255, 255, 255, 0.04)',
-                  border: activeTicker === t ? '1px solid var(--accent-cyan)' : '1px solid var(--border-subtle)',
-                  color: activeTicker === t ? 'var(--accent-cyan)' : 'var(--text-secondary)',
-                  borderRadius: 8,
-                  padding: '4px 9px',
-                  fontSize: '0.75rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                  fontFamily: 'var(--font-mono)'
-                }}
-              >
-                {t.replace('.NS', '')}
-              </button>
-            ))}
+          {/* Universal Search & Quick Ticker Select */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+            <UniversalTickerSearch />
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)', fontWeight: 600 }}>Quick:</span>
+              {popularTickers.map(t => (
+                <button
+                  key={t}
+                  onClick={() => handleSelect(t)}
+                  style={{
+                    background: activeTicker === t ? 'rgba(0, 242, 254, 0.15)' : 'rgba(255, 255, 255, 0.04)',
+                    border: activeTicker === t ? '1px solid var(--accent-cyan)' : '1px solid var(--border-subtle)',
+                    color: activeTicker === t ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+                    borderRadius: 8,
+                    padding: '4px 9px',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    fontFamily: 'var(--font-mono)'
+                  }}
+                  title={`Quick switch to ${t}`}
+                >
+                  {t.replace('.NS', '')}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Backend Connectivity Status & Sandbox Controls */}
@@ -456,7 +469,7 @@ export function Header({
       )}
 
       {/* Live Market Ticker Banner */}
-      <TickerBanner activeTicker={activeTicker} onSelectTicker={onSelectTicker} />
+      <TickerBanner activeTicker={activeTicker} onSelectTicker={handleSelect} />
 
       {/* Multi-Condition Alert Center Modal */}
       <AlertCenterModal

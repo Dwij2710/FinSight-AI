@@ -29,23 +29,62 @@ export function FundamentalView({ ticker }: FundamentalViewProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    let isCurrent = true;
+    const currentTicker = ticker.trim().toUpperCase();
+
+    // Reset previous stock data immediately to prevent showing stale results
+    setData(null);
+    setError(null);
+    setLoading(true);
+
+    const executeFetch = async () => {
+      try {
+        const res = await getFundamentals(currentTicker);
+        if (!isCurrent) return;
+
+        // Discard response if user already switched to another ticker
+        if (res.data?.ticker && res.data.ticker.toUpperCase() !== currentTicker) {
+          return;
+        }
+
+        setData(res.data);
+      } catch (err: any) {
+        if (isCurrent) {
+          setError(err?.message || `Failed to fetch fundamental metrics for ${currentTicker}`);
+          setData(null);
+        }
+      } finally {
+        if (isCurrent) {
+          setLoading(false);
+        }
+      }
+    };
+
+    executeFetch();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [ticker]);
+
   const fetchFundamentals = async () => {
     setLoading(true);
     setError(null);
+    const currentTicker = ticker.trim().toUpperCase();
     try {
-      const res = await getFundamentals(ticker);
+      const res = await getFundamentals(currentTicker);
+      if (res.data?.ticker && res.data.ticker.toUpperCase() !== currentTicker) {
+        return;
+      }
       setData(res.data);
     } catch (err: any) {
-      setError(err?.message || `Failed to fetch fundamental metrics for ${ticker}`);
+      setError(err?.message || `Failed to fetch fundamental metrics for ${currentTicker}`);
       setData(null);
     } finally {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    fetchFundamentals();
-  }, [ticker]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>

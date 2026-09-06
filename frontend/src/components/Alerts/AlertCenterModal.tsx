@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Bell,
   X,
@@ -16,6 +16,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { useAlerts } from '../../context/AlertContext';
+import { useTicker } from '../../context/TickerContext';
 import { AlertConditionType } from '../../lib/types';
 
 interface AlertCenterModalProps {
@@ -35,7 +36,8 @@ const CONDITION_PRESETS: { type: AlertConditionType; label: string; icon: string
   { type: 'RSI_OVERSOLD', label: 'RSI Oversold (<=)', icon: '❄️', defaultVal: 30, hint: 'Triggers when RSI indicates technical oversold bounce territory' },
 ];
 
-export function AlertCenterModal({ isOpen, onClose, defaultTicker = 'AAPL' }: AlertCenterModalProps) {
+export function AlertCenterModal({ isOpen, onClose, defaultTicker }: AlertCenterModalProps) {
+  const { activeTicker } = useTicker();
   const {
     multiAlerts,
     addMultiConditionAlert,
@@ -45,12 +47,19 @@ export function AlertCenterModal({ isOpen, onClose, defaultTicker = 'AAPL' }: Al
     isChecking
   } = useAlerts();
 
+  const effectiveDefault = (defaultTicker || activeTicker || 'AAPL').toUpperCase();
   const [activeTab, setActiveTab] = useState<'manage' | 'create'>('manage');
-  const [ticker, setTicker] = useState(defaultTicker);
+  const [ticker, setTicker] = useState(effectiveDefault);
   const [conditionType, setConditionType] = useState<AlertConditionType>('PRICE_ABOVE');
   const [thresholdValue, setThresholdValue] = useState<number>(200);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setTicker(effectiveDefault);
+    }
+  }, [isOpen, effectiveDefault]);
 
   if (!isOpen) return null;
 

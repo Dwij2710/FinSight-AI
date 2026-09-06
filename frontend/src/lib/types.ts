@@ -789,8 +789,28 @@ export interface StressTestResponseData {
   historical_scenarios_meta: any[];
 }
 
+// ==================== UNIVERSAL TICKER SEARCH (SEARCH-01) ====================
+export interface TickerSearchResult {
+  symbol: string;
+  name: string;
+  exchange: string;
+  asset_type: string;
+  sector?: string;
+  industry?: string;
+}
 
+export interface TickerSearchResponse {
+  query: string;
+  total: number;
+  results: TickerSearchResult[];
+}
 
-
-
-
+export interface TickerValidationResult {
+  symbol: string;
+  is_valid: boolean;
+  name?: string;
+  exchange?: string;
+  currency?: string;
+  data_available: boolean;
+  message?: string;
+}

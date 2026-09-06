@@ -14,8 +14,10 @@ if _PROJECT_ROOT not in sys.path:
 from src.ai_features import SentimentAnalyzer, FinBERTAnalyzer, TrendClassifier
 from ..schemas import SentimentRequest, SignalRequest, ApiResponse
 from ..utils.serializer import sanitize_for_json
+from ..services.cache import CacheService
 
 router = APIRouter(prefix="/api/ai", tags=["AI Insights"])
+cache_service = CacheService.get_instance()
 
 @router.post("/sentiment", response_model=ApiResponse)
 async def analyze_sentiment(req: SentimentRequest):
@@ -24,20 +26,36 @@ async def analyze_sentiment(req: SentimentRequest):
         if not ticker:
             raise HTTPException(status_code=400, detail="Ticker symbol is required.")
 
+        cache_key = f"finsight:sentiment:{ticker}"
+        cached = cache_service.get_sync(cache_key)
+        if cached:
+            return ApiResponse(
+                success=True,
+                data_source="cache",
+                freshness="cached",
+                fetched_at=datetime.datetime.utcnow().isoformat() + "Z",
+                data=cached
+            )
+
         analyzer = FinBERTAnalyzer(ticker)
         sentiment_df, model_used = analyzer.get_news_sentiment()
 
+        now_ts = datetime.datetime.utcnow().isoformat() + "Z"
         if sentiment_df.empty:
+            empty_payload = {
+                "ticker": ticker,
+                "model_used": model_used,
+                "overall_score": 0.0,
+                "overall_label": "Neutral",
+                "counts": {"Positive": 0, "Neutral": 0, "Negative": 0},
+                "articles": []
+            }
+            cache_service.set_sync(cache_key, empty_payload, ttl_seconds=120)
             return ApiResponse(
                 success=True,
-                data={
-                    "ticker": ticker,
-                    "model_used": model_used,
-                    "overall_score": 0.0,
-                    "overall_label": "Neutral",
-                    "counts": {"Positive": 0, "Neutral": 0, "Negative": 0},
-                    "articles": []
-                }
+                data_source="live",
+                fetched_at=now_ts,
+                data=empty_payload
             )
 
         avg_score = float(sentiment_df['Sentiment Score'].mean())
@@ -54,33 +72,35 @@ async def analyze_sentiment(req: SentimentRequest):
         for art in articles:
             if not art.get('Link') or art.get('Link') == '#':
                 art['Link'] = f"https://finance.yahoo.com/quote/{ticker}/news"
-        now_ts = datetime.datetime.utcnow().isoformat() + "Z"
+
+        response_payload = sanitize_for_json({
+            "ticker": ticker,
+            "model_used": model_used,
+            "overall_score": round(avg_score, 3),
+            "overall_label": overall_label,
+            "data_source": "live",
+            "fetched_at": now_ts,
+            "counts": {
+                "Positive": int(counts.get("Positive", 0)),
+                "Neutral": int(counts.get("Neutral", 0)),
+                "Negative": int(counts.get("Negative", 0))
+            },
+            "articles": articles
+        })
+
+        cache_service.set_sync(cache_key, response_payload, ttl_seconds=300)
 
         return ApiResponse(
             success=True,
             data_source="live",
             fetched_at=now_ts,
-            data=sanitize_for_json({
-                "ticker": ticker,
-                "model_used": model_used,
-                "overall_score": round(avg_score, 3),
-                "overall_label": overall_label,
-                "data_source": "live",
-                "fetched_at": now_ts,
-                "counts": {
-                    "Positive": int(counts.get("Positive", 0)),
-                    "Neutral": int(counts.get("Neutral", 0)),
-                    "Negative": int(counts.get("Negative", 0))
-                },
-                "articles": articles
-            })
+            data=response_payload
         )
 
     except HTTPException:
         raise
     except Exception as e:
-        import traceback
-        return ApiResponse(success=False, message=f"Sentiment analysis failed: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Sentiment analysis failed for {ticker}: {str(e)}")
 
 @router.post("/signal", response_model=ApiResponse)
 async def predict_trade_signal(req: SignalRequest):
@@ -88,6 +108,17 @@ async def predict_trade_signal(req: SignalRequest):
         ticker = req.ticker.strip().upper()
         if not ticker:
             raise HTTPException(status_code=400, detail="Ticker symbol is required.")
+
+        cache_key = f"finsight:signal:{ticker}"
+        cached = cache_service.get_sync(cache_key)
+        if cached:
+            return ApiResponse(
+                success=True,
+                data_source="cache",
+                freshness="cached",
+                fetched_at=datetime.datetime.utcnow().isoformat() + "Z",
+                data=cached
+            )
 
         end = datetime.date.today()
         start = end - datetime.timedelta(days=365 * 2)
@@ -135,30 +166,33 @@ async def predict_trade_signal(req: SignalRequest):
         current_sma50 = float(last_row.get('SMA_50', 0.0)) if 'SMA_50' in last_row else None
         now_ts = datetime.datetime.utcnow().isoformat() + "Z"
 
+        response_payload = sanitize_for_json({
+            "ticker": ticker,
+            "signal": signal,
+            "confidence_pct": round(float(confidence) * 100, 1),
+            "accuracy_pct": round(float(accuracy) * 100, 1),
+            "is_strong": bool(confidence > 0.6),
+            "training_period": f"{start.strftime('%b %Y')} – {end.strftime('%b %Y')} (730 Bars)",
+            "data_source": "live",
+            "fetched_at": now_ts,
+            "feature_importance": feat_list,
+            "technical_indicators": {
+                "rsi": round(current_rsi, 2) if current_rsi else None,
+                "sma_20": round(current_sma20, 2) if current_sma20 else None,
+                "sma_50": round(current_sma50, 2) if current_sma50 else None
+            }
+        })
+
+        cache_service.set_sync(cache_key, response_payload, ttl_seconds=300)
+
         return ApiResponse(
             success=True,
             data_source="live",
             fetched_at=now_ts,
-            data=sanitize_for_json({
-                "ticker": ticker,
-                "signal": signal,
-                "confidence_pct": round(float(confidence) * 100, 1),
-                "accuracy_pct": round(float(accuracy) * 100, 1),
-                "is_strong": bool(confidence > 0.6),
-                "training_period": f"{start.strftime('%b %Y')} – {end.strftime('%b %Y')} (730 Bars)",
-                "data_source": "live",
-                "fetched_at": now_ts,
-                "feature_importance": feat_list,
-                "technical_indicators": {
-                    "rsi": round(current_rsi, 2) if current_rsi else None,
-                    "sma_20": round(current_sma20, 2) if current_sma20 else None,
-                    "sma_50": round(current_sma50, 2) if current_sma50 else None
-                }
-            })
+            data=response_payload
         )
 
     except HTTPException:
         raise
     except Exception as e:
-        import traceback
-        return ApiResponse(success=False, message=f"Trade signal generation failed: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Trade signal generation failed for {ticker}: {str(e)}")

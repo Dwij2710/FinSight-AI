@@ -18,30 +18,79 @@ export function AiInsightsView({ ticker }: { ticker: string }) {
   const [error, setError] = useState<string | null>(null);
   const [isDemo, setIsDemo] = useState(false);
 
+  useEffect(() => {
+    let isCurrent = true;
+    const currentTicker = ticker.trim().toUpperCase();
+
+    // Reset previous stock data immediately to prevent showing stale results
+    setSentiment(null);
+    setSignal(null);
+    setError(null);
+    setLoadingSentiment(true);
+    setLoadingSignal(true);
+
+    const executeFetch = async () => {
+      try {
+        const [sentRes, sigRes] = await Promise.all([
+          getNewsSentiment(currentTicker),
+          getTradeSignal(currentTicker)
+        ]);
+
+        if (!isCurrent) return;
+
+        // Discard response if user already switched to another ticker
+        if (sentRes.data?.ticker && sentRes.data.ticker.toUpperCase() !== currentTicker) {
+          return;
+        }
+        if (sigRes.data?.ticker && sigRes.data.ticker.toUpperCase() !== currentTicker) {
+          return;
+        }
+
+        setSentiment(sentRes.data);
+        setSignal(sigRes.data);
+        setIsDemo(Boolean(sentRes.isDemo || sigRes.isDemo));
+      } catch (err: any) {
+        if (isCurrent) {
+          setError(err?.message || `Failed to fetch AI insights for ${currentTicker}.`);
+        }
+      } finally {
+        if (isCurrent) {
+          setLoadingSentiment(false);
+          setLoadingSignal(false);
+        }
+      }
+    };
+
+    executeFetch();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [ticker, isDemoMode]);
+
   const fetchInsights = async () => {
     setLoadingSentiment(true);
     setLoadingSignal(true);
     setError(null);
+    const currentTicker = ticker.trim().toUpperCase();
 
     try {
       const [sentRes, sigRes] = await Promise.all([
-        getNewsSentiment(ticker),
-        getTradeSignal(ticker)
+        getNewsSentiment(currentTicker),
+        getTradeSignal(currentTicker)
       ]);
+      if (sentRes.data?.ticker && sentRes.data.ticker.toUpperCase() !== currentTicker) return;
+      if (sigRes.data?.ticker && sigRes.data.ticker.toUpperCase() !== currentTicker) return;
       setSentiment(sentRes.data);
       setSignal(sigRes.data);
       setIsDemo(Boolean(sentRes.isDemo || sigRes.isDemo));
     } catch (err: any) {
-      setError(err?.message || 'Failed to fetch AI insights.');
+      setError(err?.message || `Failed to fetch AI insights for ${currentTicker}.`);
     } finally {
       setLoadingSentiment(false);
       setLoadingSignal(false);
     }
   };
-
-  useEffect(() => {
-    fetchInsights();
-  }, [ticker, isDemoMode]);
 
   const importanceItems = (signal?.feature_importance || []).map(f => ({
     label: f.feature,
@@ -107,6 +156,43 @@ export function AiInsightsView({ ticker }: { ticker: string }) {
           suggestedAction="Ensure the backend service is running, or switch to Sandbox Mode."
           onSwitchToSandbox={() => setDemoMode(true)}
         />
+      )}
+
+      {/* Loading Transition Indicator */}
+      {(loadingSentiment || loadingSignal) && (!sentiment || !signal) && (
+        <div
+          className="glass-panel"
+          style={{
+            padding: '36px 24px',
+            textAlign: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 12
+          }}
+        >
+          <div
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: '50%',
+              background: 'rgba(0, 242, 254, 0.12)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'var(--accent-cyan)'
+            }}
+          >
+            <Bot size={22} />
+          </div>
+          <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '1rem' }}>
+            Analyzing Financial NLP Sentiment & Quantitative Signals for <span style={{ color: 'var(--accent-cyan)', fontFamily: 'var(--font-mono)' }}>{ticker}</span>...
+          </div>
+          <div style={{ color: 'var(--text-secondary)', fontSize: '0.82rem' }}>
+            Aggregating news articles, computing FinBERT polarity distributions, and running technical feature importance models.
+          </div>
+        </div>
       )}
 
       {/* Signal Banner */}

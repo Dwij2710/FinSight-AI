@@ -19,30 +19,59 @@ class MultiVariateDataFetcher:
             'US Dollar': 'DX-Y.NYB'
         }
         
-    def fetch_data(self, lookback_days=365*2): # Increased to 2 years for better KNN/Anomaly detection
+    def fetch_data(self, lookback_days=365*2): # 2 years for robust factor attribution and anomaly detection
         end = datetime.date.today()
         start = end - datetime.timedelta(days=lookback_days)
         
-        tickers_to_fetch = [self.ticker] + list(self.macro_tickers.values())
+        sym = self.ticker.strip().upper()
+        tickers_to_fetch = [sym] + list(self.macro_tickers.values())
         
         try:
             # Download multi-variate data
-            data = yf.download(tickers_to_fetch, start=start, end=end)['Close']
+            downloaded = yf.download(tickers_to_fetch, start=start, end=end, progress=False)
             
-            if data.empty:
+            if downloaded.empty:
                 return pd.DataFrame()
+            
+            if isinstance(downloaded.columns, pd.MultiIndex):
+                if 'Close' in downloaded.columns.get_level_values(0):
+                    data = downloaded['Close'].copy()
+                else:
+                    data = downloaded.iloc[:, 0].to_frame()
+            elif 'Close' in downloaded.columns:
+                data = downloaded[['Close']].copy()
+            else:
+                data = downloaded.copy()
+
+            if isinstance(data, pd.Series):
+                data = data.to_frame(name=sym)
                 
             # Rename columns back to human-readable names
-            rename_map = {self.macro_tickers[k]: k for k in self.macro_tickers}
-            rename_map[self.ticker] = 'Price'
+            macro_inv = {v.upper(): k for k, v in self.macro_tickers.items()}
+            rename_map = {}
+            for col in data.columns:
+                col_str = str(col).strip().upper()
+                if col_str in macro_inv:
+                    rename_map[col] = macro_inv[col_str]
+                elif col_str == sym:
+                    rename_map[col] = 'Price'
+
             data = data.rename(columns=rename_map)
-            
-            # Forward fill missing data from mismatched trading days
-            data = data.ffill().dropna()
+
+            # If 'Price' is still not found, locate the non-macro column
+            if 'Price' not in data.columns:
+                macro_names = set(self.macro_tickers.keys())
+                for col in data.columns:
+                    if col not in macro_names:
+                        data = data.rename(columns={col: 'Price'})
+                        break
+
+            # Forward fill missing data from mismatched international trading holidays
+            data = data.ffill().bfill().dropna()
             
             return data
         except Exception as e:
-            print(f"Error fetching multi-variate data: {e}")
+            print(f"Error fetching multi-variate data for {self.ticker}: {e}")
             return pd.DataFrame()
 
 

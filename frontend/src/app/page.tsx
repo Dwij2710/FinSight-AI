@@ -16,6 +16,7 @@ import { StrategyBuilderView } from '../components/StrategyBuilder/StrategyBuild
 import { StressTestingView } from '../components/StressTesting/StressTestingView';
 import { WatchlistView } from '../components/WatchlistView';
 import { AboutView } from '../components/AboutView';
+import { TickerProvider, useTicker } from '../context/TickerContext';
 import { MarketDataProvider } from '../context/MarketDataContext';
 import { ThemeProvider } from '../context/ThemeContext';
 import { AlertProvider, useAlerts } from '../context/AlertContext';
@@ -25,33 +26,26 @@ import { BellRing, X } from 'lucide-react';
 export default function Home() {
   return (
     <ThemeProvider>
-      <MarketDataProvider>
-        <AlertProvider>
-          <DashboardContent />
-        </AlertProvider>
-      </MarketDataProvider>
+      <TickerProvider>
+        <MarketDataProvider>
+          <AlertProvider>
+            <DashboardContent />
+          </AlertProvider>
+        </MarketDataProvider>
+      </TickerProvider>
     </ThemeProvider>
   );
 }
 
 function DashboardContent() {
   const [activeTab, setActiveTab] = useState<'terminal' | 'compare' | 'fundamentals' | 'forecast' | 'portfolio' | 'paper' | 'strategy' | 'stress' | 'watchlists' | 'ai' | 'rl' | 'tft' | 'about'>('terminal');
-  const [ticker, setTicker] = useState('AAPL');
-  const [searchInput, setSearchInput] = useState('');
+  const { activeTicker, setActiveTicker } = useTicker();
   const { activeToast, dismissToast } = useAlerts();
-
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (searchInput.trim()) {
-      setTicker(searchInput.trim().toUpperCase());
-      setSearchInput('');
-    }
-  };
 
   return (
     <div className="app-container">
       {/* Top Navigation Header */}
-      <Header activeTicker={ticker} onSelectTicker={(t) => setTicker(t)} />
+      <Header activeTicker={activeTicker} onSelectTicker={(t) => setActiveTicker(t)} />
 
       {/* Main Dashboard Workspace */}
       <main className="main-content">
@@ -184,56 +178,40 @@ function DashboardContent() {
             </button>
           </nav>
 
-          {/* Active Ticker Indicator & Search */}
-          {activeTab !== 'portfolio' && activeTab !== 'paper' && activeTab !== 'strategy' && activeTab !== 'stress' && activeTab !== 'watchlists' && activeTab !== 'about' && (
-            <form onSubmit={handleSearchSubmit} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                background: 'var(--bg-input)',
-                border: '1px solid var(--border-subtle)',
-                borderRadius: 10,
-                padding: '4px 10px',
-                gap: 8
+          {/* Active Security Context Pill */}
+          {activeTab !== 'portfolio' && activeTab !== 'paper' && activeTab !== 'strategy' && activeTab !== 'stress' && activeTab !== 'about' && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '5px 12px',
+              borderRadius: 20,
+              background: 'rgba(0, 242, 254, 0.08)',
+              border: '1px solid rgba(0, 242, 254, 0.25)',
+              fontSize: '0.78rem'
+            }}>
+              <span style={{ color: 'var(--text-muted)' }}>Inspecting:</span>
+              <strong style={{
+                fontFamily: 'var(--font-mono)',
+                color: 'var(--accent-cyan)',
+                letterSpacing: '0.04em'
               }}>
-                <Search size={14} color="var(--text-muted)" />
-                <input
-                  type="text"
-                  placeholder={`Search ticker (Active: ${ticker})`}
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: 'var(--text-primary)',
-                    fontSize: '0.85rem',
-                    outline: 'none',
-                    width: 180,
-                    fontFamily: 'var(--font-mono)'
-                  }}
-                />
-              </div>
-              <button
-                type="submit"
-                className="btn-primary"
-                style={{ padding: '8px 14px', fontSize: '0.82rem' }}
-              >
-                Go
-              </button>
-            </form>
+                {activeTicker}
+              </strong>
+            </div>
           )}
         </div>
 
         {/* View Routing */}
         {activeTab === 'terminal' && (
           <StockTerminalView
-            ticker={ticker}
+            ticker={activeTicker}
             onNavigateTab={(tab) => setActiveTab(tab)}
           />
         )}
-        {activeTab === 'compare' && <ModelComparisonView ticker={ticker} />}
-        {activeTab === 'fundamentals' && <FundamentalView ticker={ticker} />}
-        {activeTab === 'forecast' && <ForecastView ticker={ticker} />}
+        {activeTab === 'compare' && <ModelComparisonView ticker={activeTicker} />}
+        {activeTab === 'fundamentals' && <FundamentalView ticker={activeTicker} />}
+        {activeTab === 'forecast' && <ForecastView ticker={activeTicker} />}
         {activeTab === 'portfolio' && <PortfolioView />}
         {activeTab === 'paper' && <PaperTradingView />}
         {activeTab === 'strategy' && <StrategyBuilderView />}
@@ -241,17 +219,17 @@ function DashboardContent() {
         {activeTab === 'watchlists' && (
           <WatchlistView
             onSelectTicker={(t) => {
-              setTicker(t);
-              setActiveTab('forecast');
+              setActiveTicker(t);
+              setActiveTab('terminal');
             }}
             onOpenPortfolio={(tickers) => {
               setActiveTab('portfolio');
             }}
           />
         )}
-        {activeTab === 'ai' && <AiInsightsView ticker={ticker} />}
-        {activeTab === 'rl' && <RlAgentView ticker={ticker} />}
-        {activeTab === 'tft' && <TftView ticker={ticker} />}
+        {activeTab === 'ai' && <AiInsightsView ticker={activeTicker} />}
+        {activeTab === 'rl' && <RlAgentView ticker={activeTicker} />}
+        {activeTab === 'tft' && <TftView ticker={activeTicker} />}
         {activeTab === 'about' && <AboutView />}
       </main>
 

@@ -14,8 +14,10 @@ if _PROJECT_ROOT not in sys.path:
 from src.data_fetcher import DataFetcher
 from ..schemas import ForecastRequest, ApiResponse
 from ..utils.serializer import sanitize_for_json
+from ..services.cache import CacheService
 
 router = APIRouter(prefix="/api/forecast", tags=["Forecast"])
+cache_service = CacheService.get_instance()
 
 @router.post("", response_model=ApiResponse)
 async def generate_forecast(req: ForecastRequest):
@@ -39,6 +41,18 @@ async def generate_forecast(req: ForecastRequest):
 
         if parsed_end > date.today() + timedelta(days=2):
             raise HTTPException(status_code=400, detail="End date cannot be in the future.")
+
+        # Cache check before expensive data download and SARIMAX model estimation
+        cache_key = f"finsight:forecast:{ticker}:{req.column or 'Close'}:{start_date}:{end_date}:{req.p}_{req.d}_{req.q}_{req.sp}_{req.sd}_{req.sq}_{req.seasonal_period}:{req.forecast_period}:{req.run_backtest}"
+        cached_data = cache_service.get_sync(cache_key)
+        if cached_data:
+            return ApiResponse(
+                success=True,
+                data_source="cache",
+                freshness="cached",
+                fetched_at=datetime.datetime.utcnow().isoformat() + "Z",
+                data=cached_data
+            )
 
         # 1. Download stock data via institutional DataFetcher (Polygon + YF fallback + caching)
         fetcher = DataFetcher()
@@ -288,33 +302,37 @@ async def generate_forecast(req: ForecastRequest):
             "fit_score": round(accuracy, 2)
         }
 
+        response_payload = sanitize_for_json({
+            "ticker": ticker,
+            "column": col,
+            "data_source": "live",
+            "fetched_at": now_ts,
+            "in_sample_fit": in_sample_metrics,
+            "out_of_sample_validation": backtest_data,
+            "metrics": {
+                # Backward compatibility fields
+                "aic": aic_val,
+                "bic": bic_val,
+                "rmse": round(rmse, 2),
+                "mape": round(mape, 2),
+                "accuracy": round(accuracy, 2),
+                "in_sample": in_sample_metrics,
+                "out_of_sample": backtest_data if backtest_data and "error" not in backtest_data else None
+            },
+            "adf_test": adf_result,
+            "history": history_points,
+            "predictions": predictions_list,
+            "decomposition": decomp_data,
+            "backtest": backtest_data
+        })
+
+        cache_service.set_sync(cache_key, response_payload, ttl_seconds=300)
+
         return ApiResponse(
             success=True,
             data_source="live",
             fetched_at=now_ts,
-            data=sanitize_for_json({
-                "ticker": ticker,
-                "column": col,
-                "data_source": "live",
-                "fetched_at": now_ts,
-                "in_sample_fit": in_sample_metrics,
-                "out_of_sample_validation": backtest_data,
-                "metrics": {
-                    # Backward compatibility fields
-                    "aic": aic_val,
-                    "bic": bic_val,
-                    "rmse": round(rmse, 2),
-                    "mape": round(mape, 2),
-                    "accuracy": round(accuracy, 2),
-                    "in_sample": in_sample_metrics,
-                    "out_of_sample": backtest_data if backtest_data and "error" not in backtest_data else None
-                },
-                "adf_test": adf_result,
-                "history": history_points,
-                "predictions": predictions_list,
-                "decomposition": decomp_data,
-                "backtest": backtest_data
-            })
+            data=response_payload
         )
 
     except HTTPException:

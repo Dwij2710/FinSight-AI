@@ -22,30 +22,77 @@ export function RlAgentView({ ticker }: { ticker: string }) {
   const [actionType, setActionType] = useState('Continuous');
   const [riskProfile, setRiskProfile] = useState('Aggressive');
 
+  useEffect(() => {
+    let isCurrent = true;
+    const currentTicker = ticker.trim().toUpperCase();
+
+    // Reset previous stock data immediately to prevent showing stale results
+    setData(null);
+    setError(null);
+    setLoading(true);
+
+    const executeSimulation = async () => {
+      try {
+        const res = await simulateRlAgent({
+          ticker: currentTicker,
+          initial_balance: initialBalance,
+          algo_type: algoType,
+          action_type: actionType,
+          risk_profile: riskProfile
+        });
+
+        if (!isCurrent) return;
+
+        // Discard response if user already switched to another ticker
+        if (res.data?.ticker && res.data.ticker.toUpperCase() !== currentTicker) {
+          return;
+        }
+
+        setData(res.data);
+        setIsDemo(Boolean(res.isDemo));
+      } catch (err: any) {
+        if (isCurrent) {
+          setError(err?.message || `Reinforcement learning trading simulation failed for ${currentTicker}.`);
+          setData(null);
+        }
+      } finally {
+        if (isCurrent) {
+          setLoading(false);
+        }
+      }
+    };
+
+    executeSimulation();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [ticker, isDemoMode, initialBalance, algoType, actionType, riskProfile]);
+
   const runSimulation = async () => {
     setLoading(true);
     setError(null);
+    const currentTicker = ticker.trim().toUpperCase();
     try {
       const res = await simulateRlAgent({
-        ticker,
+        ticker: currentTicker,
         initial_balance: initialBalance,
         algo_type: algoType,
         action_type: actionType,
         risk_profile: riskProfile
       });
+      if (res.data?.ticker && res.data.ticker.toUpperCase() !== currentTicker) {
+        return;
+      }
       setData(res.data);
       setIsDemo(Boolean(res.isDemo));
     } catch (err: any) {
-      setError(err?.message || 'Reinforcement learning trading simulation failed.');
+      setError(err?.message || `Reinforcement learning trading simulation failed for ${currentTicker}.`);
       setData(null);
     } finally {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    runSimulation();
-  }, [ticker, isDemoMode]);
 
   // Chart series
   const dates = data?.history.map(h => h.date) || [];
@@ -107,6 +154,43 @@ export function RlAgentView({ ticker }: { ticker: string }) {
           suggestedAction="Ensure the backend service is running, or switch to Sandbox Mode."
           onSwitchToSandbox={() => setDemoMode(true)}
         />
+      )}
+
+      {/* Loading Transition Indicator */}
+      {loading && !data && (
+        <div
+          className="glass-panel"
+          style={{
+            padding: '36px 24px',
+            textAlign: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 12
+          }}
+        >
+          <div
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: '50%',
+              background: 'rgba(168, 85, 247, 0.12)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'var(--accent-purple)'
+            }}
+          >
+            <Cpu size={22} />
+          </div>
+          <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '1rem' }}>
+            Simulating Reinforcement Learning Policy for <span style={{ color: 'var(--accent-purple)', fontFamily: 'var(--font-mono)' }}>{ticker}</span>...
+          </div>
+          <div style={{ color: 'var(--text-secondary)', fontSize: '0.82rem' }}>
+            Training PPO agent over historical price episodes with risk-adjusted penalty reward signals.
+          </div>
+        </div>
       )}
 
       {/* Quant Metric Cards */}

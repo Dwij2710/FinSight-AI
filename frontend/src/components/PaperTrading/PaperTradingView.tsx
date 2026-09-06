@@ -9,11 +9,13 @@ import {
 import { PaperAccountData, PaperOrderPayload } from '../../lib/types';
 import { getPaperAccount, placePaperOrder, resetPaperAccount } from '../../lib/api';
 import { useMarketData } from '../../context/MarketDataContext';
+import { useTicker } from '../../context/TickerContext';
 import { ProvenanceBadge } from '../ProvenanceBadge';
 import { exportSeriesToCsv } from '../../lib/chartExport';
 
 export function PaperTradingView() {
   const { isDemoMode, getQuote } = useMarketData();
+  const { activeTicker } = useTicker();
   const [account, setAccount] = useState<PaperAccountData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -21,9 +23,15 @@ export function PaperTradingView() {
   const [orderSuccessMsg, setOrderSuccessMsg] = useState<string | null>(null);
   const [isDemo, setIsDemo] = useState(false);
 
-  // Order Ticket State
-  const [ticker, setTicker] = useState('AAPL');
+  // Order Ticket State (pre-filled with active platform ticker, freely editable)
+  const [ticker, setTicker] = useState(activeTicker);
   const [action, setAction] = useState<'BUY' | 'SELL'>('BUY');
+
+  useEffect(() => {
+    if (activeTicker) {
+      setTicker(activeTicker);
+    }
+  }, [activeTicker]);
   const [orderType, setOrderType] = useState<'MARKET' | 'LIMIT'>('MARKET');
   const [shares, setShares] = useState<number>(20);
   const [limitPrice, setLimitPrice] = useState<string>('');

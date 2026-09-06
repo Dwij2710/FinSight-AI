@@ -50,45 +50,117 @@ export function StockTerminalView({ ticker, onNavigateTab }: StockTerminalViewPr
   const [showForecastCone, setShowForecastCone] = useState(true);
   const [indicatorPane, setIndicatorPane] = useState<'none' | 'rsi' | 'macd'>('rsi');
 
+  useEffect(() => {
+    let isCurrent = true;
+    const currentTicker = ticker.trim().toUpperCase();
+
+    // Reset data when switching tickers to prevent showing previous stock's data
+    setLoading(true);
+    setError(null);
+    setData(null);
+    setLiveQuote(null);
+    setScoreData(null);
+    setForecastData(null);
+
+    const executeFetch = async () => {
+      try {
+        const [histRes, quoteRes, scoreRes, forecastRes] = await Promise.allSettled([
+          getTickerHistory(currentTicker, period),
+          getSingleQuote(currentTicker),
+          getFinSightScore(currentTicker),
+          getForecast({ ticker: currentTicker, forecast_period: 30 })
+        ]);
+
+        if (!isCurrent) return;
+
+        if (histRes.status === 'fulfilled') {
+          if (histRes.value?.data?.ticker?.toUpperCase() === currentTicker) {
+            setData(histRes.value.data);
+          }
+        } else {
+          throw histRes.reason;
+        }
+
+        if (quoteRes.status === 'fulfilled' && quoteRes.value) {
+          if (quoteRes.value.ticker?.toUpperCase() === currentTicker) {
+            setLiveQuote(quoteRes.value);
+          }
+        }
+
+        if (scoreRes.status === 'fulfilled' && scoreRes.value?.data) {
+          if (scoreRes.value.data.ticker?.toUpperCase() === currentTicker) {
+            setScoreData(scoreRes.value.data);
+          }
+        }
+
+        if (forecastRes.status === 'fulfilled' && forecastRes.value?.data) {
+          if (forecastRes.value.data.ticker?.toUpperCase() === currentTicker) {
+            setForecastData(forecastRes.value.data);
+          }
+        }
+      } catch (err: any) {
+        if (isCurrent) {
+          setError(err?.message || `Failed to fetch technical terminal data for ${currentTicker}`);
+          setData(null);
+        }
+      } finally {
+        if (isCurrent) {
+          setLoading(false);
+        }
+      }
+    };
+
+    executeFetch();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [ticker, period, isDemoMode]);
+
   const fetchTerminalData = async () => {
+    const currentTicker = ticker.trim().toUpperCase();
     setLoading(true);
     setError(null);
     try {
       const [histRes, quoteRes, scoreRes, forecastRes] = await Promise.allSettled([
-        getTickerHistory(ticker, period),
-        getSingleQuote(ticker),
-        getFinSightScore(ticker),
-        getForecast({ ticker, forecast_period: 30 })
+        getTickerHistory(currentTicker, period),
+        getSingleQuote(currentTicker),
+        getFinSightScore(currentTicker),
+        getForecast({ ticker: currentTicker, forecast_period: 30 })
       ]);
 
       if (histRes.status === 'fulfilled') {
-        setData(histRes.value.data);
+        if (histRes.value?.data?.ticker?.toUpperCase() === currentTicker) {
+          setData(histRes.value.data);
+        }
       } else {
         throw histRes.reason;
       }
 
       if (quoteRes.status === 'fulfilled' && quoteRes.value) {
-        setLiveQuote(quoteRes.value);
+        if (quoteRes.value.ticker?.toUpperCase() === currentTicker) {
+          setLiveQuote(quoteRes.value);
+        }
       }
 
       if (scoreRes.status === 'fulfilled' && scoreRes.value?.data) {
-        setScoreData(scoreRes.value.data);
+        if (scoreRes.value.data.ticker?.toUpperCase() === currentTicker) {
+          setScoreData(scoreRes.value.data);
+        }
       }
 
       if (forecastRes.status === 'fulfilled' && forecastRes.value?.data) {
-        setForecastData(forecastRes.value.data);
+        if (forecastRes.value.data.ticker?.toUpperCase() === currentTicker) {
+          setForecastData(forecastRes.value.data);
+        }
       }
     } catch (err: any) {
-      setError(err?.message || `Failed to fetch technical terminal data for ${ticker}`);
+      setError(err?.message || `Failed to fetch technical terminal data for ${currentTicker}`);
       setData(null);
     } finally {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    fetchTerminalData();
-  }, [ticker, period, isDemoMode]);
 
   const summary = data?.summary;
   const price = liveQuote?.price || summary?.latest_price || 0;
@@ -114,6 +186,17 @@ export function StockTerminalView({ ticker, onNavigateTab }: StockTerminalViewPr
   const forecastU80 = latestPred
     ? (latestPred.upper_80 ?? (latestPred.predicted_mean + ((latestPred.upper_95 ?? latestPred.upper_bound) - latestPred.predicted_mean) * 0.65))
     : null;
+
+  if (loading && !data) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 400, gap: 16 }}>
+        <div style={{ width: 42, height: 42, borderRadius: '50%', border: '3px solid rgba(0, 242, 254, 0.2)', borderTopColor: 'var(--accent-cyan)', animation: 'spin 0.8s linear infinite' }} />
+        <div style={{ color: 'var(--text-secondary)', fontSize: '0.90rem', fontFamily: 'var(--font-mono)' }}>
+          Loading live quantitative intelligence for <strong style={{ color: 'var(--accent-cyan)' }}>{ticker}</strong>...
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>

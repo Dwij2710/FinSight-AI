@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { LiveTickerQuote, BackendHealthStatus, DataSourceType } from '../lib/types';
-import { getLiveTickerQuotes, checkBackendHealth } from '../lib/api';
+import { getLiveTickerQuotes, getSingleQuote, checkBackendHealth } from '../lib/api';
 
 export type FreshnessState =
   | 'LIVE'
@@ -18,6 +18,7 @@ interface MarketDataContextType {
   freshnessState: FreshnessState;
   backendHealth: BackendHealthStatus | null;
   refreshQuotes: () => Promise<void>;
+  trackTicker: (ticker: string) => Promise<void>;
   isDemoMode: boolean;
   setDemoMode: (enabled: boolean) => void;
   lastUpdated: string | null;
@@ -31,6 +32,7 @@ const DEFAULT_SYMBOLS = ['SPY', 'QQQ', 'AAPL', 'NVDA', 'MSFT', 'TSLA', 'RELIANCE
 
 export function MarketDataProvider({ children }: { children: ReactNode }) {
   const [quotes, setQuotes] = useState<Record<string, LiveTickerQuote>>({});
+  const [trackedSymbols, setTrackedSymbols] = useState<string[]>(DEFAULT_SYMBOLS);
   const [freshnessState, setFreshnessState] = useState<FreshnessState>('LOADING');
   const [backendHealth, setBackendHealth] = useState<BackendHealthStatus | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
@@ -83,14 +85,16 @@ export function MarketDataProvider({ children }: { children: ReactNode }) {
         setWakingStartedAt(null);
       }
 
-      // 2. Fetch live quotes for default watchlist
-      const res = await getLiveTickerQuotes(DEFAULT_SYMBOLS);
+      // 2. Fetch live quotes for tracked tickers
+      const res = await getLiveTickerQuotes(trackedSymbols);
       if (res && res.quotes && res.quotes.length > 0) {
-        const quoteMap: Record<string, LiveTickerQuote> = {};
-        res.quotes.forEach(q => {
-          quoteMap[q.ticker.toUpperCase()] = q;
+        setQuotes(prev => {
+          const next = { ...prev };
+          res.quotes.forEach(q => {
+            next[q.ticker.toUpperCase()] = q;
+          });
+          return next;
         });
-        setQuotes(quoteMap);
         setLastUpdated(res.fetchedAt);
 
         if (res.dataSource === 'simulated' || isDemoMode) {
@@ -110,7 +114,28 @@ export function MarketDataProvider({ children }: { children: ReactNode }) {
         setFreshnessState('PROVIDER_ERROR');
       }
     }
-  }, [isDemoMode]);
+  }, [isDemoMode, trackedSymbols]);
+
+  const trackTicker = useCallback(async (ticker: string) => {
+    const clean = ticker.trim().toUpperCase();
+    if (!clean) return;
+
+    setTrackedSymbols(prev => {
+      if (prev.includes(clean)) return prev;
+      return [...prev, clean];
+    });
+
+    if (!quotes[clean]) {
+      try {
+        const quote = await getSingleQuote(clean);
+        if (quote) {
+          setQuotes(prev => ({ ...prev, [clean]: quote }));
+        }
+      } catch {
+        // Handled silently; background poll will retry
+      }
+    }
+  }, [quotes]);
 
   useEffect(() => {
     refreshQuotes();
@@ -138,6 +163,7 @@ export function MarketDataProvider({ children }: { children: ReactNode }) {
         freshnessState,
         backendHealth,
         refreshQuotes,
+        trackTicker,
         isDemoMode,
         setDemoMode,
         lastUpdated,

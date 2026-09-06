@@ -36,23 +36,62 @@ export function ModelComparisonView({ ticker }: ModelComparisonViewProps) {
   const [horizon, setHorizon] = useState<number>(30);
   const [testDays, setTestDays] = useState<number>(60);
 
+  useEffect(() => {
+    let isCurrent = true;
+    const currentTicker = ticker.trim().toUpperCase();
+
+    // Reset previous stock data immediately to prevent showing stale results
+    setData(null);
+    setError(null);
+    setLoading(true);
+
+    const executeFetch = async () => {
+      try {
+        const res = await getModelComparison(currentTicker, horizon, testDays);
+        if (!isCurrent) return;
+
+        // Discard response if user already switched to another ticker
+        if (res.data?.ticker && res.data.ticker.toUpperCase() !== currentTicker) {
+          return;
+        }
+
+        setData(res.data);
+      } catch (err: any) {
+        if (isCurrent) {
+          setError(err?.message || `Failed to evaluate models for ${currentTicker}`);
+          setData(null);
+        }
+      } finally {
+        if (isCurrent) {
+          setLoading(false);
+        }
+      }
+    };
+
+    executeFetch();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [ticker, horizon, testDays]);
+
   const fetchComparison = async () => {
     setLoading(true);
     setError(null);
+    const currentTicker = ticker.trim().toUpperCase();
     try {
-      const res = await getModelComparison(ticker, horizon, testDays);
+      const res = await getModelComparison(currentTicker, horizon, testDays);
+      if (res.data?.ticker && res.data.ticker.toUpperCase() !== currentTicker) {
+        return;
+      }
       setData(res.data);
     } catch (err: any) {
-      setError(err?.message || `Failed to evaluate models for ${ticker}`);
+      setError(err?.message || `Failed to evaluate models for ${currentTicker}`);
       setData(null);
     } finally {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    fetchComparison();
-  }, [ticker, horizon, testDays]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
